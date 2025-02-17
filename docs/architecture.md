@@ -49,51 +49,33 @@ let's delve into the technical architecture, code repository structure, and modu
 
 ```
 deeppowers/
-├── cmake/                 # CMake build scripts and modules
-├── src/                   # Source code
-│   ├── common/            # Common utility classes and functions (logging, timers, data structures)
-│   ├── core/              # Core engine components
-│   │   ├── request_queue/   # Request queue implementation
-│   │   ├── batching/        # Batching engine logic
-│   │   ├── preprocessing/  # Input preprocessing modules
-│   │   ├── execution/      # Execution Engine and Scheduler
-│   │   │   ├── engine.cpp/hpp    # Main Execution Engine class
-│   │   │   ├── scheduler.cpp/hpp # Dynamic Scheduler implementation
-│   │   │   ├── task/          # Task definition and management
-│   │   ├── postprocessing/ # Output postprocessing modules
-│   │   ├── config/          # Configuration Manager
-│   │   │   ├── config_manager.cpp/hpp  # Configuration Manager class
-│   │   │   ├── options.hpp        # Command-line options and configuration structures
-│   │   ├── graph_compiler/  # Graph Compiler
-│   │   │   ├── compiler.cpp/hpp    # Main Graph Compiler class
-│   │   │   ├── parser/          # Model parsers (ONNX, PyTorch, Custom)
-│   │   │   ├── optimizer/       # Graph optimization passes
-│   │   │   ├── code_gen/        # Code generation for Execution Engine
-│   │   ├── hal/              # Hardware Abstraction Layer
-│   │   │   ├── hal.hpp          # HAL abstract interfaces
-│   │   │   ├── cuda/          # CUDA backend implementation
-│   │   │   │   ├── cuda_device.cpp/hpp  # CUDA Device implementation
-│   │   │   │   ├── cuda_kernels/      # Optimized CUDA kernels
-│   │   │   ├── rocm/          # ROCm backend implementation
-│   │   │   │   ├── rocm_device.cpp/hpp  # ROCm Device implementation
-│   │   │   │   ├── rocm_kernels/      # Optimized ROCm kernels
-│   │   │   ├── metal/         # Metal backend implementation
-│   │   │   │   ├── metal_device.cpp/hpp # Metal Device implementation
-│   │   │   │   ├── metal_kernels/     # Optimized Metal kernels
-│   │   │   ├── oneapi/        # oneAPI backend implementation
-│   │   │   │   ├── oneapi_device.cpp/hpp# oneAPI Device implementation
-│   │   │   │   ├── oneapi_kernels/    # Optimized oneAPI kernels
-│   ├── models/            # Predefined model architectures (if needed, or can be external)
-│   ├── api/               # Public API for using the engine (C++, Python bindings)
-│   │   ├── cpp/           # C++ API headers and source
-│   │   ├── python/        # Python bindings (using pybind11 or similar)
-├── include/               # Public include headers (mirrored from src/api/cpp for external use)
-├── examples/              # Example usage and demos
-├── tests/                 # Unit tests and integration tests
-├── docs/                  # Documentation (using Doxygen, Sphinx, etc.)
-├── scripts/               # Utility scripts (build, test, benchmarking)
-├── README.md              # Project README
-└── LICENSE                # License file
+├── src/
+│   ├── core/                      # Core implementation
+│   │   ├── hal/                  # Hardware Abstraction Layer for device management
+│   │   ├── request_queue/        # Request queue and management system
+│   │   ├── batching/            # Batch processing and optimization
+│   │   ├── execution/           # Execution engine and runtime
+│   │   ├── distributed/         # Distributed computing support
+│   │   ├── scheduling/          # Task scheduling and resource management
+│   │   ├── monitoring/          # System monitoring and metrics
+│   │   ├── config/             # Configuration management
+│   │   ├── preprocessing/      # Input preprocessing pipeline
+│   │   ├── postprocessing/     # Output postprocessing pipeline
+│   │   ├── graph/              # Computation graph management
+│   │   ├── api/               # Internal API implementations
+│   │   ├── model/             # Base model architecture
+│   │   ├── memory/            # Memory management system
+│   │   ├── inference/         # Inference engine core
+│   │   ├── models/            # Specific model implementations
+│   │   ├── tokenizer/         # Tokenization implementations
+│   │   └── utils/             # Utility components
+│   ├── api/                   # External API implementations
+│   └── common/                # Common utilities
+├── tests/                     # Test suite
+├── scripts/                   # Utility scripts
+├── examples/                  # Example usage  
+├── docs/                      # Documentation
+└── README.md                  # Project overview
 ```
 
 **III. Module Functional Descriptions and Implementation Processes**

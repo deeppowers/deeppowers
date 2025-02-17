@@ -44,7 +44,7 @@ Before you begin, ensure you have the following prerequisites installed on your 
 The DeepPowers Inference Engine is built from source using CMake. Follow these steps to build and install the engine:
 
 ```bash
-git clone <repository_url>  # Replace <repository_url> with the actual repository URL
+git clone https://github.com/deeppowers/deeppowers.git
 cd deeppowers
 mkdir build
 cd build
@@ -55,7 +55,7 @@ sudo make install # Optional: Install to system-wide locations (requires sudo)
 
 **Explanation:**
 
-*   `git clone <repository_url>`: Clones the inference engine repository to your local machine.
+*   `git clone https://github.com/deeppowers/deeppowers.git`: Clones the inference engine repository to your local machine.
 *   `mkdir build && cd build`: Creates a `build` directory and navigates into it.  Building in a separate directory is recommended.
 *   `cmake .. -DCMAKE_BUILD_TYPE=Release`: Configures the build process using CMake. `-DCMAKE_BUILD_TYPE=Release` specifies a release build with optimizations. You can use `Debug` for debugging.
 *   `make -j$(nproc)`: Compiles the code using `make`, utilizing all available CPU cores (`-j$(nproc)`) for faster compilation.
