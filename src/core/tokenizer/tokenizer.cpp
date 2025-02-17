@@ -23,6 +23,9 @@ Tokenizer::Tokenizer(TokenizerType type)
     , max_token_length_(256)
     , tokenizer_type_(type)
     , memory_pool_(new MemoryPool(4096)) {  // 4KB blocks
+    device_type_ = DeviceType::CPU;
+    gpu_initialized_ = false;
+    gpu_vocab_ = nullptr;
 }
 
 Tokenizer::~Tokenizer() {
@@ -369,6 +372,109 @@ std::string_view Tokenizer::intern_string(const std::string& str) const {
 
 std::string_view Tokenizer::intern_string(std::string_view str) const {
     return vocab_manager_->intern_string(str);
+}
+
+void Tokenizer::set_device_type(DeviceType device_type) {
+    if (device_type == DeviceType::GPU && !is_gpu_available()) {
+        throw std::runtime_error("GPU is not available");
+    }
+    
+    if (device_type_ != device_type) {
+        // Clean up old device resources
+        if (device_type_ == DeviceType::GPU) {
+            free_gpu_vocab();
+        }
+        
+        device_type_ = device_type;
+        
+        // Initialize new device resources
+        if (device_type_ == DeviceType::GPU) {
+            initialize_gpu_vocab();
+        }
+    }
+}
+
+bool Tokenizer::is_gpu_available() const {
+    int device_count;
+    cudaError_t error = cudaGetDeviceCount(&device_count);
+    return (error == cudaSuccess && device_count > 0);
+}
+
+void Tokenizer::initialize_gpu_vocab() const {
+    if (gpu_initialized_) return;
+    
+    // Get vocabulary data
+    auto tokens = vocab_manager_->get_all_tokens();
+    std::vector<int> ids(tokens.size());
+    for (size_t i = 0; i < tokens.size(); i++) {
+        ids[i] = vocab_manager_->token_to_id(tokens[i]);
+    }
+    
+    // Create and initialize GPU vocabulary
+    gpu_vocab_ = std::make_unique<GPUVocabTable>();
+    cudaError_t error = initializeGPUVocab(tokens, ids, *gpu_vocab_);
+    
+    if (error != cudaSuccess) {
+        gpu_vocab_.reset();
+        throw std::runtime_error("Failed to initialize GPU vocabulary: " + 
+                               std::string(cudaGetErrorString(error)));
+    }
+    
+    gpu_initialized_ = true;
+}
+
+void Tokenizer::free_gpu_vocab() const {
+    if (!gpu_initialized_) return;
+    
+    if (gpu_vocab_) {
+        freeGPUVocab(*gpu_vocab_);
+        gpu_vocab_.reset();
+    }
+    
+    gpu_initialized_ = false;
+}
+
+std::vector<std::vector<int32_t>> Tokenizer::encode_batch_gpu(
+    const std::vector<std::string_view>& texts,
+    bool pad_to_max_length) const {
+    
+    if (device_type_ != DeviceType::GPU) {
+        throw std::runtime_error("GPU acceleration is not enabled");
+    }
+    
+    if (!gpu_initialized_) {
+        initialize_gpu_vocab();
+    }
+    
+    // Concatenate all texts with space separator
+    std::string combined_text;
+    size_t total_length = 0;
+    for (const auto& text : texts) {
+        total_length += text.length() + 1;  // +1 for space
+    }
+    combined_text.reserve(total_length);
+    
+    for (size_t i = 0; i < texts.size(); i++) {
+        if (i > 0) combined_text += ' ';
+        combined_text.append(texts[i].data(), texts[i].length());
+    }
+    
+    // Perform GPU tokenization
+    auto token_ids = tokenizeOnGPU(combined_text, *gpu_vocab_);
+    
+    // Pad if requested
+    if (pad_to_max_length) {
+        size_t max_length = 0;
+        for (const auto& tokens : token_ids) {
+            max_length = std::max(max_length, tokens.size());
+        }
+        
+        for (auto& tokens : token_ids) {
+            tokens.resize(max_length, pad_token_id_);
+        }
+    }
+    
+    return token_ids;
 }
 
 } // namespace deeppowers 

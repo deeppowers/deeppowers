@@ -6,6 +6,7 @@
 #include <memory>
 #include "bpe.hpp"
 #include "wordpiece.hpp"
+#include "tokenizer_kernels.cuh"
 #include "../utils/thread_pool.hpp"
 #include "../utils/memory_pool.hpp"
 #include "../utils/string_pool.hpp"
@@ -14,11 +15,18 @@ namespace deeppowers {
 
 // Forward declarations
 class VocabManager;
+struct GPUVocabTable;
 
 // Tokenizer type enumeration
 enum class TokenizerType {
     BPE,
     WordPiece
+};
+
+// Device type enumeration
+enum class DeviceType {
+    CPU,
+    GPU
 };
 
 class Tokenizer {
@@ -62,6 +70,11 @@ public:
         const std::vector<std::vector<int32_t>>& token_batches,
         size_t num_threads = 0) const;
 
+    // GPU-accelerated batch processing methods
+    std::vector<std::vector<int32_t>> encode_batch_gpu(
+        const std::vector<std::string_view>& texts,
+        bool pad_to_max_length = false) const;
+    
     // Get vocabulary size
     size_t vocab_size() const;
 
@@ -74,6 +87,11 @@ public:
     // Configuration
     void set_tokenizer_type(TokenizerType type);
     TokenizerType get_tokenizer_type() const { return tokenizer_type_; }
+    
+    // Device configuration
+    void set_device_type(DeviceType device_type);
+    DeviceType get_device_type() const { return device_type_; }
+    bool is_gpu_available() const;
 
 private:
     // Internal tokenization helpers
@@ -92,6 +110,10 @@ private:
         size_t start,
         size_t end,
         std::vector<std::string_view>& results) const;
+    
+    // GPU processing helpers
+    void initialize_gpu_vocab() const;
+    void free_gpu_vocab() const;
     
     // Memory management
     void* allocate_memory(size_t size) const;
@@ -117,9 +139,14 @@ private:
     bool add_eos_token_;
     size_t max_token_length_;
     TokenizerType tokenizer_type_;
+    DeviceType device_type_;
     
     // Memory pool for temporary allocations
     mutable MemoryPool* memory_pool_;
+    
+    // GPU resources
+    mutable std::unique_ptr<GPUVocabTable> gpu_vocab_;
+    mutable bool gpu_initialized_;
 };
 
 } // namespace deeppowers 
