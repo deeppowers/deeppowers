@@ -15,7 +15,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="DeepPowers Team",
-    author_email="team@deeppowers.ai",
+    author_email="support@deeppowers.xyz",
     url="https://github.com/deeppowers/deeppowers",
     packages=find_packages(),
     package_data={

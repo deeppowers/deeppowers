@@ -1,7 +1,67 @@
 [project]
 name = "deeppowers"
 version = "0.1.0"
-description = "Add your description here"
+description = "High Performance Text Generation Library"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "DeepPowers Team", email = "support@deeppowers.xyz" }
+]
+keywords = ["machine learning", "text generation", "nlp", "deep learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "numpy>=1.21.0",
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "pybind11>=2.10.0",
+    "typing-extensions>=4.0.0",
+    "tqdm>=4.62.0",
+    "psutil>=5.8.0",
+    "unicodedata2>=14.0.0",
+    "matplotlib>=3.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.10.0",
+    "flake8>=4.0.0",
+]
+viz = [
+    "tensorboard>=2.12.0",
+    "wandb>=0.15.0",
+]
+
+[build-system]
+requires = [
+    "setuptools>=45",
+    "wheel",
+    "cmake>=3.15.0",
+    "ninja>=1.10.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--cov=deeppowers --cov-report=term-missing"
