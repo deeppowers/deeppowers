@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package deeppowers;
+
+// Model generation service
+service DeepPowers {
+    // Generate text from a prompt
+    rpc Generate(GenerateRequest) returns (GenerateResponse) {}
+    
+    // Get system metrics
+    rpc GetMetrics(MetricsRequest) returns (MetricsResponse) {}
+    
+    // Get scheduler status
+    rpc GetSchedulerStatus(SchedulerStatusRequest) returns (SchedulerStatusResponse) {}
+}
+
+// Generation request
+message GenerateRequest {
+    string request_id = 1;        // Unique request ID
+    string prompt = 2;            // Input prompt
+    int32 max_tokens = 3;         // Maximum tokens to generate
+    float temperature = 4;        // Sampling temperature
+    float top_p = 5;             // Nucleus sampling threshold
+    repeated string stop = 6;     // Stop sequences
+}
+
+// Generation response
+message GenerateResponse {
+    string text = 1;             // Generated text
+    repeated float logprobs = 2;  // Token log probabilities
+    repeated string tokens = 3;   // Generated tokens
+}
+
+// Metrics request
+message MetricsRequest {
+    // Empty for now
+}
+
+// Hardware metrics
+message HardwareMetrics {
+    float gpu_utilization = 1;     // GPU utilization (0-1)
+    float gpu_memory_used_mb = 2;  // GPU memory used in MB
+    float gpu_temperature = 3;     // GPU temperature in Celsius
+    float host_memory_used_mb = 4; // Host memory used in MB
+}
+
+// Latency metrics
+message LatencyMetrics {
+    float avg_ms = 1;             // Average latency in milliseconds
+    float p50_ms = 2;             // 50th percentile latency
+    float p90_ms = 3;             // 90th percentile latency
+    float p99_ms = 4;             // 99th percentile latency
+}
+
+// Throughput metrics
+message ThroughputMetrics {
+    float requests_per_second = 1;  // Request throughput
+    float tokens_per_second = 2;    // Token throughput
+}
+
+// Error metrics
+message ErrorMetrics {
+    int32 total_errors = 1;        // Total number of errors
+    int32 timeout_errors = 2;      // Number of timeout errors
+    int32 oom_errors = 3;          // Number of out-of-memory errors
+}
+
+// Metrics response
+message MetricsResponse {
+    HardwareMetrics hardware = 1;    // Hardware metrics
+    LatencyMetrics latency = 2;      // Latency metrics
+    ThroughputMetrics throughput = 3; // Throughput metrics
+    ErrorMetrics errors = 4;          // Error metrics
+}
+
+// Scheduler status request
+message SchedulerStatusRequest {
+    // Empty for now
+}
+
+// Scheduler status response
+message SchedulerStatusResponse {
+    int32 active_requests = 1;     // Currently active requests
+    int32 total_requests = 2;      // Total processed requests
+    int32 dropped_requests = 3;    // Dropped requests
+    float avg_latency_ms = 4;      // Average request latency
+    float avg_throughput = 5;      // Average throughput
+} 

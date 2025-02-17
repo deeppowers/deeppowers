@@ -1,0 +1,19 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find dependencies
+find_dependency(CUDA)
+find_dependency(OpenSSL)
+find_dependency(nlohmann_json)
+
+# Include targets
+include("${CMAKE_CURRENT_LIST_DIR}/deeppowers-targets.cmake")
+
+# Set variables
+set(DEEPPOWERS_INCLUDE_DIRS "@PACKAGE_INCLUDE_INSTALL_DIR@")
+set(DEEPPOWERS_LIBRARIES deeppowers::API)
+set(DEEPPOWERS_VERSION "@PROJECT_VERSION@")
+
+# Check components
+check_required_components(deeppowers) 

@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: deeppowers
+Description: High Performance Text Generation Library
+Version: @PROJECT_VERSION@
+Requires: nlohmann_json openssl
+Libs: -L${libdir} -ldeeppowers
+Cflags: -I${includedir} 
