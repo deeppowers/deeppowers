@@ -12,6 +12,7 @@ StringPool::~StringPool() {
     clear();
 }
 
+// Intern a string
 std::string_view StringPool::intern(const std::string& str) {
     std::lock_guard<std::mutex> lock(mutex_);
     
@@ -31,15 +32,12 @@ std::string_view StringPool::intern(const std::string& str) {
     return std::string_view(*new_it);
 }
 
-std::string_view StringPool::intern(const char* str) {
-    return intern(std::string_view(str));
-}
-
+// Intern a string view
 std::string_view StringPool::intern(std::string_view str) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     // Try to find existing string
-    auto it = strings_.find(str);
+    auto it = strings_.find(std::string(str));
     if (it != strings_.end()) {
         return std::string_view(*it);
     }
@@ -54,6 +52,7 @@ std::string_view StringPool::intern(std::string_view str) {
     return std::string_view(*new_it);
 }
 
+// Get number of strings in pool
 size_t StringPool::size() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return strings_.size();
@@ -64,6 +63,7 @@ size_t StringPool::memory_usage() const {
     return total_memory_;
 }
 
+// Clear the pool
 void StringPool::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     strings_.clear();

@@ -1,54 +1,86 @@
 #include "bpe.hpp"
+#include "vocab_manager.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <queue>
 #include <regex>
+#include <unordered_map>
 
 namespace deeppowers {
 
 BPETokenizer::BPETokenizer()
     : max_token_length_(100)
-    , enable_caching_(true) {
+    , enable_caching_(true)
+    , vocab_manager_(nullptr) {
 }
 
 BPETokenizer::~BPETokenizer() = default;
 
-void BPETokenizer::train(const std::vector<std::string>& texts, size_t vocab_size, size_t min_frequency) {
-    // Clear existing data
-    token_frequencies_.clear();
-    merge_rules_.clear();
-    pair_frequencies_.clear();
+void BPETokenizer::initialize(VocabManager* vocab_manager) {
+    vocab_manager_ = vocab_manager;
+    load_merge_rules();
+}
+
+void BPETokenizer::train(
+    const std::vector<std::vector<std::string_view>>& pre_tokenized,
+    size_t vocab_size,
+    size_t min_frequency) {
     
-    // Count initial tokens
-    for (const auto& text : texts) {
-        auto tokens = get_initial_tokens(text);
+    // Count initial character frequencies
+    std::unordered_map<std::string, size_t> char_freqs;
+    for (const auto& tokens : pre_tokenized) {
         for (const auto& token : tokens) {
-            token_frequencies_[token]++;
+            for (char c : std::string(token)) {
+                char_freqs[std::string(1, c)]++;
+            }
         }
     }
     
-    // Remove low frequency tokens
-    for (auto it = token_frequencies_.begin(); it != token_frequencies_.end();) {
-        if (it->second < min_frequency) {
-            it = token_frequencies_.erase(it);
-        } else {
-            ++it;
+    // Initialize vocabulary with characters
+    for (const auto& [ch, freq] : char_freqs) {
+        if (freq >= min_frequency) {
+            vocab_manager_->add_token(ch);
         }
     }
     
-    // Main BPE training loop
-    while (token_frequencies_.size() < vocab_size) {
-        // Count pair frequencies
-        count_token_pairs(texts);
+    // Initialize token splits
+    std::unordered_map<std::string, std::vector<std::string>> token_splits;
+    for (const auto& tokens : pre_tokenized) {
+        for (const auto& token : tokens) {
+            std::string token_str(token);
+            if (token_splits.find(token_str) == token_splits.end()) {
+                // Split token into characters
+                std::vector<std::string> chars;
+                for (char c : token_str) {
+                    chars.push_back(std::string(1, c));
+                }
+                token_splits[token_str] = chars;
+            }
+        }
+    }
+    
+    // Count pair frequencies
+    auto pair_freqs = count_pair_frequencies(token_splits);
+    
+    // Merge pairs until vocab_size is reached
+    while (vocab_manager_->vocab_size() < vocab_size && !pair_freqs.empty()) {
+        // Get most frequent pair
+        auto best_pair = get_most_frequent_pair(pair_freqs);
+        if (best_pair.second < min_frequency) break;
         
-        // Find best pair to merge
-        auto best_merge = find_best_merge();
-        if (best_merge.priority <= 0) break;
+        // Create new token
+        std::string new_token = best_pair.first.first + best_pair.first.second;
+        vocab_manager_->add_token(new_token);
         
-        // Apply merge
-        apply_merge(best_merge);
-        merge_rules_.push_back(best_merge);
+        // Add merge rule
+        merge_rules_.push_back(best_pair.first);
+        
+        // Update token splits
+        update_token_splits(token_splits, best_pair.first);
+        
+        // Update pair frequencies
+        pair_freqs = count_pair_frequencies(token_splits);
     }
 }
 
@@ -177,6 +209,91 @@ void BPETokenizer::apply_merge(const MergeRule& rule) {
     }
     if (token_frequencies_[rule.second] == 0) {
         token_frequencies_.erase(rule.second);
+    }
+}
+
+std::unordered_map<std::pair<std::string, std::string>, size_t, PairHash>
+BPETokenizer::count_pair_frequencies(
+    const std::unordered_map<std::string, std::vector<std::string>>& token_splits) const {
+    
+    std::unordered_map<std::pair<std::string, std::string>, size_t, PairHash> pair_freqs;
+    
+    for (const auto& [token, splits] : token_splits) {
+        for (size_t i = 0; i < splits.size() - 1; ++i) {
+            pair_freqs[{splits[i], splits[i + 1]}]++;
+        }
+    }
+    
+    return pair_freqs;
+}
+
+std::pair<std::pair<std::string, std::string>, size_t>
+BPETokenizer::get_most_frequent_pair(
+    const std::unordered_map<std::pair<std::string, std::string>, size_t, PairHash>& pair_freqs) const {
+    
+    auto max_it = std::max_element(
+        pair_freqs.begin(),
+        pair_freqs.end(),
+        [](const auto& p1, const auto& p2) {
+            return p1.second < p2.second;
+        }
+    );
+    
+    return *max_it;
+}
+
+void BPETokenizer::update_token_splits(
+    std::unordered_map<std::string, std::vector<std::string>>& token_splits,
+    const std::pair<std::string, std::string>& pair) const {
+    
+    for (auto& [token, splits] : token_splits) {
+        size_t i = 0;
+        while (i < splits.size() - 1) {
+            if (splits[i] == pair.first && splits[i + 1] == pair.second) {
+                // Merge parts
+                splits[i] = splits[i] + splits[i + 1];
+                splits.erase(splits.begin() + i + 1);
+            } else {
+                ++i;
+            }
+        }
+    }
+}
+
+void BPETokenizer::load_merge_rules() {
+    merge_rules_.clear();
+    
+    // Get all tokens from vocabulary
+    auto tokens = vocab_manager_->get_all_tokens();
+    
+    // Sort tokens by length (longer tokens first)
+    std::sort(tokens.begin(), tokens.end(),
+        [](const std::string& a, const std::string& b) {
+            return a.length() > b.length();
+        }
+    );
+    
+    // Create merge rules
+    for (const auto& token : tokens) {
+        if (token.length() > 1) {
+            // Find the best split point
+            size_t best_split = 1;
+            for (size_t i = 1; i < token.length(); ++i) {
+                std::string first = token.substr(0, i);
+                std::string second = token.substr(i);
+                if (vocab_manager_->contains_token(first) &&
+                    vocab_manager_->contains_token(second)) {
+                    best_split = i;
+                    break;
+                }
+            }
+            
+            // Add merge rule
+            merge_rules_.push_back({
+                token.substr(0, best_split),
+                token.substr(best_split)
+            });
+        }
     }
 }
 

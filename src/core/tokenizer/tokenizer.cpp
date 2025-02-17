@@ -1,12 +1,12 @@
 #include "tokenizer.hpp"
 #include "vocab_manager.hpp"
-#include "bpe.hpp"
-#include "wordpiece.hpp"
+#include "../utils/thread_pool.hpp"
 #include <stdexcept>
 #include <algorithm>
 #include <regex>
 #include <thread>
 #include <future>
+#include <fstream>
 
 namespace deeppowers {
 
@@ -20,7 +20,7 @@ Tokenizer::Tokenizer(TokenizerType type)
     , unk_token_id_(3)
     , add_bos_token_(true)
     , add_eos_token_(true)
-    , max_token_length_(96)
+    , max_token_length_(256)
     , tokenizer_type_(type)
     , memory_pool_(new MemoryPool(4096)) {  // 4KB blocks
 }
@@ -30,129 +30,127 @@ Tokenizer::~Tokenizer() {
 }
 
 void Tokenizer::set_tokenizer_type(TokenizerType type) {
-    tokenizer_type_ = type;
+    if (type != tokenizer_type_) {
+        tokenizer_type_ = type;
+        if (type == TokenizerType::BPE) {
+            bpe_tokenizer_ = std::make_unique<BPETokenizer>();
+            wordpiece_tokenizer_.reset();
+        } else {
+            wordpiece_tokenizer_ = std::make_unique<WordPieceTokenizer>();
+            bpe_tokenizer_.reset();
+        }
+    }
 }
 
 void Tokenizer::initialize(const std::string& vocab_path) {
-    // Load vocabulary
-    vocab_manager_->load_vocab(vocab_path);
+    vocab_manager_->load_vocabulary(vocab_path);
     
-    // Add special tokens
-    vocab_manager_->add_special_token("<pad>", pad_token_id_);
-    vocab_manager_->add_special_token("<eos>", eos_token_id_);
-    vocab_manager_->add_special_token("<bos>", bos_token_id_);
-    vocab_manager_->add_special_token("<unk>", unk_token_id_);
+    if (tokenizer_type_ == TokenizerType::BPE) {
+        bpe_tokenizer_->initialize(vocab_manager_.get());
+    } else {
+        wordpiece_tokenizer_->initialize(vocab_manager_.get());
+    }
 }
 
 void Tokenizer::train(const std::vector<std::string>& texts, 
                      size_t vocab_size,
                      size_t min_frequency) {
-    switch (tokenizer_type_) {
-        case TokenizerType::BPE:
-            bpe_tokenizer_->train(texts, vocab_size, min_frequency);
-            break;
-        case TokenizerType::WordPiece:
-            wordpiece_tokenizer_->train(texts, vocab_size, min_frequency);
-            break;
+    // Pre-process texts and collect statistics
+    std::vector<std::vector<std::string_view>> pre_tokenized;
+    pre_tokenized.reserve(texts.size());
+    
+    for (const auto& text : texts) {
+        pre_tokenized.push_back(pre_tokenize(text));
+    }
+    
+    if (tokenizer_type_ == TokenizerType::BPE) {
+        bpe_tokenizer_->train(pre_tokenized, vocab_size, min_frequency);
+    } else {
+        wordpiece_tokenizer_->train(pre_tokenized, vocab_size, min_frequency);
     }
 }
 
 void Tokenizer::save(const std::string& path) const {
-    switch (tokenizer_type_) {
-        case TokenizerType::BPE:
-            bpe_tokenizer_->save_rules(path + ".bpe");
-            break;
-        case TokenizerType::WordPiece:
-            wordpiece_tokenizer_->save_model(path + ".wordpiece");
-            break;
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("Failed to open file for saving: " + path);
+    }
+    
+    // Save tokenizer type
+    out.write(reinterpret_cast<const char*>(&tokenizer_type_), sizeof(TokenizerType));
+    
+    // Save vocabulary
+    vocab_manager_->save(out);
+    
+    // Save tokenizer-specific data
+    if (tokenizer_type_ == TokenizerType::BPE) {
+        bpe_tokenizer_->save(out);
+    } else {
+        wordpiece_tokenizer_->save(out);
     }
 }
 
 void Tokenizer::load(const std::string& path) {
-    switch (tokenizer_type_) {
-        case TokenizerType::BPE:
-            bpe_tokenizer_->load_rules(path + ".bpe");
-            break;
-        case TokenizerType::WordPiece:
-            wordpiece_tokenizer_->load_model(path + ".wordpiece");
-            break;
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("Failed to open file for loading: " + path);
+    }
+    
+    // Load tokenizer type
+    TokenizerType loaded_type;
+    in.read(reinterpret_cast<char*>(&loaded_type), sizeof(TokenizerType));
+    set_tokenizer_type(loaded_type);
+    
+    // Load vocabulary
+    vocab_manager_->load(in);
+    
+    // Load tokenizer-specific data
+    if (tokenizer_type_ == TokenizerType::BPE) {
+        bpe_tokenizer_->load(in);
+    } else {
+        wordpiece_tokenizer_->load(in);
     }
 }
 
 std::vector<int32_t> Tokenizer::encode(std::string_view text) const {
-    // Pre-tokenize text into subwords
-    std::vector<std::string_view> tokens;
-    switch (tokenizer_type_) {
-        case TokenizerType::BPE:
-            tokens = bpe_tokenizer_->tokenize(text);
-            break;
-        case TokenizerType::WordPiece:
-            tokens = wordpiece_tokenizer_->tokenize(text);
-            break;
-    }
+    // Pre-tokenize the text
+    auto tokens = pre_tokenize(text);
     
-    // Convert tokens to IDs using memory pool
-    std::vector<int32_t>* token_ids = new(allocate_memory(sizeof(std::vector<int32_t>)))
-        std::vector<int32_t>();
-    token_ids->reserve(tokens.size() + 2);  // Reserve space for BOS/EOS
+    // Encode tokens to IDs
+    auto token_ids = encode_tokens(tokens);
     
-    // Add BOS token if needed
+    // Add special tokens if needed
     if (add_bos_token_) {
-        token_ids->push_back(bos_token_id_);
+        token_ids.insert(token_ids.begin(), bos_token_id_);
     }
-    
-    // Add token IDs
-    for (const auto& token : tokens) {
-        if (vocab_manager_->contains_token(std::string(token))) {
-            token_ids->push_back(vocab_manager_->token_to_id(std::string(token)));
-        } else {
-            token_ids->push_back(unk_token_id_);
-        }
-    }
-    
-    // Add EOS token if needed
     if (add_eos_token_) {
-        token_ids->push_back(eos_token_id_);
+        token_ids.push_back(eos_token_id_);
     }
     
-    // Truncate if needed
-    if (token_ids->size() > max_token_length_) {
-        token_ids->resize(max_token_length_);
-        // Make sure we still have EOS token if needed
-        if (add_eos_token_) {
-            token_ids->back() = eos_token_id_;
-        }
-    }
-    
-    // Move result to output
-    std::vector<int32_t> result = std::move(*token_ids);
-    
-    // Clean up
-    token_ids->~vector();
-    deallocate_memory(token_ids);
-    
-    return result;
+    return token_ids;
 }
 
 std::string_view Tokenizer::decode(const std::vector<int32_t>& tokens) const {
     std::string result;
-    bool is_first = true;
+    result.reserve(tokens.size() * 4); // Estimate average token length
     
-    for (int32_t token_id : tokens) {
+    for (size_t i = 0; i < tokens.size(); ++i) {
         // Skip special tokens
-        if (vocab_manager_->is_special_token(token_id)) {
+        if (tokens[i] == bos_token_id_ || tokens[i] == eos_token_id_ || 
+            tokens[i] == pad_token_id_) {
             continue;
         }
         
-        std::string_view token = intern_string(vocab_manager_->id_to_token(token_id));
-        
-        // Add space between normal tokens
-        if (!is_first && !token.empty() && token[0] != '#') {
+        // Get token text
+        auto token_text = vocab_manager_->id_to_token(tokens[i]);
+        if (i > 0 && !token_text.empty() && token_text[0] != 'Ġ') {
             result += ' ';
         }
-        
-        result += token;
-        is_first = false;
+        if (!token_text.empty() && token_text[0] == 'Ġ') {
+            result += token_text.substr(1);
+        } else {
+            result += token_text;
+        }
     }
     
     return intern_string(result);
@@ -162,27 +160,25 @@ std::vector<std::vector<int32_t>> Tokenizer::encode_batch(
     const std::vector<std::string_view>& texts,
     bool pad_to_max_length) const {
     
-    std::vector<std::vector<int32_t>> batch_tokens;
-    batch_tokens.reserve(texts.size());
+    std::vector<std::vector<int32_t>> results;
+    results.reserve(texts.size());
     
-    // Encode all texts
+    // Process each text
     size_t max_length = 0;
     for (const auto& text : texts) {
-        auto tokens = encode(text);
-        max_length = std::max(max_length, tokens.size());
-        batch_tokens.push_back(std::move(tokens));
+        auto encoded = encode(text);
+        max_length = std::max(max_length, encoded.size());
+        results.push_back(std::move(encoded));
     }
     
-    // Pad sequences if requested
+    // Pad if requested
     if (pad_to_max_length) {
-        for (auto& tokens : batch_tokens) {
-            if (tokens.size() < max_length) {
-                tokens.resize(max_length, pad_token_id_);
-            }
+        for (auto& tokens : results) {
+            tokens.resize(max_length, pad_token_id_);
         }
     }
     
-    return batch_tokens;
+    return results;
 }
 
 std::vector<std::string_view> Tokenizer::decode_batch(
@@ -202,34 +198,49 @@ size_t Tokenizer::vocab_size() const {
     return vocab_manager_->vocab_size();
 }
 
-std::vector<std::string> Tokenizer::pre_tokenize(const std::string& text) const {
-    std::vector<std::string> tokens;
+std::vector<std::string_view> Tokenizer::pre_tokenize(std::string_view text) const {
+    std::vector<std::string_view> tokens;
     
-    // Split into words first
-    std::regex word_regex(R"(\w+|\s+|[^\w\s])");
-    std::sregex_iterator it(text.begin(), text.end(), word_regex);
-    std::sregex_iterator end;
+    // Basic whitespace tokenization
+    size_t start = 0;
+    size_t end = 0;
     
-    while (it != end) {
-        std::string word = it->str();
-        if (!word.empty()) {
-            tokens.push_back(word);
+    while (end < text.size()) {
+        // Skip whitespace
+        while (start < text.size() && std::isspace(text[start])) {
+            ++start;
         }
-        ++it;
+        
+        // Find end of token
+        end = start;
+        while (end < text.size() && !std::isspace(text[end])) {
+            ++end;
+        }
+        
+        // Add token if found
+        if (start < end) {
+            tokens.push_back(text.substr(start, end - start));
+        }
+        
+        start = end;
     }
     
     return tokens;
 }
 
-std::vector<int32_t> Tokenizer::encode_tokens(const std::vector<std::string>& tokens) const {
+std::vector<int32_t> Tokenizer::encode_tokens(
+    const std::vector<std::string_view>& tokens) const {
+    
     std::vector<int32_t> token_ids;
     token_ids.reserve(tokens.size());
     
     for (const auto& token : tokens) {
-        if (vocab_manager_->contains_token(token)) {
-            token_ids.push_back(vocab_manager_->token_to_id(token));
+        if (tokenizer_type_ == TokenizerType::BPE) {
+            auto subtoken_ids = bpe_tokenizer_->encode_token(token);
+            token_ids.insert(token_ids.end(), subtoken_ids.begin(), subtoken_ids.end());
         } else {
-            token_ids.push_back(unk_token_id_);
+            auto subtoken_ids = wordpiece_tokenizer_->encode_token(token);
+            token_ids.insert(token_ids.end(), subtoken_ids.begin(), subtoken_ids.end());
         }
     }
     
@@ -237,7 +248,7 @@ std::vector<int32_t> Tokenizer::encode_tokens(const std::vector<std::string>& to
 }
 
 std::vector<std::vector<int32_t>> Tokenizer::encode_batch_parallel(
-    const std::vector<std::string>& texts,
+    const std::vector<std::string_view>& texts,
     bool pad_to_max_length,
     size_t num_threads) const {
     
@@ -248,25 +259,19 @@ std::vector<std::vector<int32_t>> Tokenizer::encode_batch_parallel(
     // Create thread pool
     ThreadPool pool(num_threads);
     
-    // Prepare result vector
+    // Prepare results vector
     std::vector<std::vector<int32_t>> results(texts.size());
     
-    // Calculate batch size for each thread
+    // Calculate batch size per thread
     size_t batch_size = (texts.size() + num_threads - 1) / num_threads;
-    std::vector<std::future<void>> futures;
     
     // Submit tasks to thread pool
-    for (size_t i = 0; i < num_threads; ++i) {
-        size_t start = i * batch_size;
-        size_t end = std::min(start + batch_size, texts.size());
-        
-        if (start >= texts.size()) break;
-        
-        futures.push_back(pool.enqueue(
-            [this, &texts, start, end, &results] {
-                process_batch_range(texts, start, end, results);
-            }
-        ));
+    std::vector<std::future<void>> futures;
+    for (size_t i = 0; i < texts.size(); i += batch_size) {
+        size_t end = std::min(i + batch_size, texts.size());
+        futures.push_back(pool.enqueue([this, &texts, &results, i, end]() {
+            process_batch_range(texts, i, end, results);
+        }));
     }
     
     // Wait for all tasks to complete
@@ -274,17 +279,14 @@ std::vector<std::vector<int32_t>> Tokenizer::encode_batch_parallel(
         future.get();
     }
     
-    // Pad sequences if requested
+    // Pad if requested
     if (pad_to_max_length) {
         size_t max_length = 0;
         for (const auto& tokens : results) {
             max_length = std::max(max_length, tokens.size());
         }
-        
         for (auto& tokens : results) {
-            if (tokens.size() < max_length) {
-                tokens.resize(max_length, pad_token_id_);
-            }
+            tokens.resize(max_length, pad_token_id_);
         }
     }
     
@@ -332,7 +334,7 @@ std::vector<std::string> Tokenizer::decode_batch_parallel(
 }
 
 void Tokenizer::process_batch_range(
-    const std::vector<std::string>& texts,
+    const std::vector<std::string_view>& texts,
     size_t start,
     size_t end,
     std::vector<std::vector<int32_t>>& results) const {
@@ -362,11 +364,11 @@ void Tokenizer::deallocate_memory(void* ptr) const {
 }
 
 std::string_view Tokenizer::intern_string(const std::string& str) const {
-    return get_string_pool().intern(str);
+    return vocab_manager_->intern_string(str);
 }
 
 std::string_view Tokenizer::intern_string(std::string_view str) const {
-    return get_string_pool().intern(str);
+    return vocab_manager_->intern_string(str);
 }
 
 } // namespace deeppowers 

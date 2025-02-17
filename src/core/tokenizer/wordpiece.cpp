@@ -1,4 +1,5 @@
 #include "wordpiece.hpp"
+#include "vocab_manager.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -10,7 +11,10 @@
 namespace deeppowers {
 
 WordPieceTokenizer::WordPieceTokenizer()
-    : unk_token_("[UNK]")
+    : vocab_manager_(nullptr)
+    , max_word_length_(100)
+    , unknown_token_("##UNK##")
+    , unk_token_("[UNK]")
     , prefix_("##")
     , max_input_chars_per_word_(200)
     , do_lower_case_(true)
@@ -21,63 +25,63 @@ WordPieceTokenizer::WordPieceTokenizer()
 
 WordPieceTokenizer::~WordPieceTokenizer() = default;
 
-void WordPieceTokenizer::train(const std::vector<std::string>& texts,
-                              size_t vocab_size,
-                              size_t min_frequency,
-                              size_t max_subword_length) {
-    // Clear existing vocabulary
-    vocab_.clear();
+void WordPieceTokenizer::initialize(VocabManager* vocab_manager) {
+    vocab_manager_ = vocab_manager;
+    build_trie();
+}
 
-    // Count word frequencies
-    std::unordered_map<std::string, int32_t> word_freqs;
-    for (const auto& text : texts) {
-        auto words = basic_tokenize(text);
-        for (const auto& word : words) {
-            word_freqs[word]++;
-        }
-    }
-
-    // Initialize with characters
-    std::unordered_map<std::string, int32_t> subword_freqs;
-    for (const auto& [word, freq] : word_freqs) {
-        if (freq < min_frequency) continue;
-        
-        auto chars = split_to_unicode(word);
-        for (const auto& c : chars) {
-            subword_freqs[c] += freq;
-        }
-    }
-
-    // Iteratively merge most frequent pairs
-    while (vocab_.size() < vocab_size) {
-        std::pair<std::string, std::string> best_pair;
-        int32_t best_freq = 0;
-
-        // Find best pair to merge
-        for (const auto& [word, freq] : word_freqs) {
-            if (freq < min_frequency) continue;
+void WordPieceTokenizer::train(
+    const std::vector<std::vector<std::string_view>>& pre_tokenized,
+    size_t vocab_size,
+    size_t min_frequency) {
+    
+    // Count subword frequencies
+    std::unordered_map<std::string, size_t> subword_freqs;
+    
+    // Initialize with whole words and their subwords
+    for (const auto& tokens : pre_tokenized) {
+        for (const auto& token : tokens) {
+            std::string word(token);
+            if (word.length() > max_word_length_) continue;
             
-            auto subwords = wordpiece_tokenize(word);
-            for (size_t i = 0; i < subwords.size() - 1; i++) {
-                auto pair = std::make_pair(subwords[i], subwords[i + 1]);
-                auto merged = subwords[i] + subwords[i + 1];
-                
-                if (merged.length() <= max_subword_length) {
-                    int32_t pair_freq = freq;
-                    if (pair_freq > best_freq) {
-                        best_pair = pair;
-                        best_freq = pair_freq;
+            // Add whole word
+            subword_freqs[word]++;
+            
+            // Add all possible subwords
+            for (size_t start = 0; start < word.length(); ++start) {
+                for (size_t len = 1; len <= word.length() - start; ++len) {
+                    std::string subword = word.substr(start, len);
+                    if (start > 0) {
+                        subword = "##" + subword;
                     }
+                    subword_freqs[subword]++;
                 }
             }
         }
-
-        if (best_freq < min_frequency) break;
-
-        // Add merged token to vocabulary
-        std::string merged_token = best_pair.first + best_pair.second;
-        vocab_[merged_token] = vocab_.size();
     }
+    
+    // Sort subwords by frequency
+    std::vector<std::pair<std::string, size_t>> subword_freq_pairs;
+    for (const auto& [subword, freq] : subword_freqs) {
+        if (freq >= min_frequency) {
+            subword_freq_pairs.push_back({subword, freq});
+        }
+    }
+    
+    std::sort(subword_freq_pairs.begin(), subword_freq_pairs.end(),
+        [](const auto& a, const auto& b) {
+            return a.second > b.second;
+        }
+    );
+    
+    // Add top subwords to vocabulary
+    size_t num_tokens = std::min(vocab_size, subword_freq_pairs.size());
+    for (size_t i = 0; i < num_tokens; ++i) {
+        vocab_manager_->add_token(subword_freq_pairs[i].first);
+    }
+    
+    // Build trie for efficient tokenization
+    build_trie();
 }
 
 void WordPieceTokenizer::save_model(const std::string& path) const {
@@ -96,8 +100,8 @@ void WordPieceTokenizer::save_model(const std::string& path) const {
     file << unk_token_ << "\n";
 
     // Save vocabulary
-    file << vocab_.size() << "\n";
-    for (const auto& [token, id] : vocab_) {
+    file << vocab_manager_->size() << "\n";
+    for (const auto& [token, id] : vocab_manager_->get_vocab()) {
         file << token << "\t" << id << "\n";
     }
 }
@@ -119,15 +123,18 @@ void WordPieceTokenizer::load_model(const std::string& path) {
     std::getline(file, unk_token_);
 
     // Load vocabulary
-    vocab_.clear();
+    vocab_manager_->clear();
     size_t vocab_size;
     file >> vocab_size;
     std::string token;
     int32_t id;
     for (size_t i = 0; i < vocab_size; i++) {
         file >> token >> id;
-        vocab_[token] = id;
+        vocab_manager_->add_token(token);
     }
+
+    // Rebuild trie
+    build_trie();
 }
 
 std::vector<std::string> WordPieceTokenizer::tokenize(const std::string& text) const {
@@ -259,7 +266,7 @@ std::vector<std::string> WordPieceTokenizer::wordpiece_tokenize(const std::strin
                 substr = prefix_ + substr;
             }
             
-            if (vocab_.find(substr) != vocab_.end()) {
+            if (vocab_manager_->contains_token(substr)) {
                 sub_tokens.push_back(substr);
                 start = end;
                 found = true;
@@ -275,6 +282,41 @@ std::vector<std::string> WordPieceTokenizer::wordpiece_tokenize(const std::strin
     }
     
     return sub_tokens;
+}
+
+void WordPieceTokenizer::build_trie() {
+    trie_root_ = std::make_unique<TrieNode>();
+    
+    // Get all tokens from vocabulary
+    auto tokens = vocab_manager_->get_all_tokens();
+    
+    // Add each token to trie
+    for (const auto& token : tokens) {
+        TrieNode* node = trie_root_.get();
+        
+        // Handle ##prefix for continuation subwords
+        size_t start = 0;
+        bool is_continuation = false;
+        if (token.length() >= 2 && token.substr(0, 2) == "##") {
+            start = 2;
+            is_continuation = true;
+        }
+        
+        // Add characters to trie
+        for (size_t i = start; i < token.length(); ++i) {
+            char c = token[i];
+            if (node->children.find(c) == node->children.end()) {
+                node->children[c] = std::make_unique<TrieNode>();
+            }
+            node = node->children[c].get();
+        }
+        
+        // Mark end of token
+        node->is_token = true;
+        node->token = token;
+        node->token_id = vocab_manager_->token_to_id(token);
+        node->is_continuation = is_continuation;
+    }
 }
 
 } // namespace deeppowers 
