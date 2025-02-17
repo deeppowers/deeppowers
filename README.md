@@ -297,4 +297,3 @@ Special thanks to all contributors and the open-source community.
 ## Contact
 
 - GitHub Issues: [Create an issue](https://github.com/deeppowers/deeppowers/issues)
-- Email: your.email@example.com
