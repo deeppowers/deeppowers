@@ -6,7 +6,7 @@
   </a>
 </div>
 <p align="center">
-  <em>DeepPowers is a high-performance and flexible engine that accelerates the inference of large language models on heterogeneous GPUs. </em>
+  <em>An open-source, high-performance inference accelerator engine supporting various large language models such as DEEPSEEK, GPT, GEMINI, and CLAUDE. </em>
 </p>
 
 
