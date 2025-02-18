@@ -320,23 +320,39 @@ DeepPowers includes several performance optimization features:
 
 ## Roadmap
 
-### In Progress
-- Model execution framework
-- Inference pipeline
-- Streaming generation
-- Dynamic batch processing
-- Advanced memory management
-- Computation graph optimization
+### Implemented Features ✨
+- ✅ Hardware Abstraction Layer (HAL) - Basic CUDA and ROCM support
+- ✅ Tokenizer Implementation - WordPiece and BPE algorithms
+- ✅ Memory Management - Basic memory pooling system
+- ✅ Request Queue Management - Basic request handling
+- ✅ Configuration System - Basic config management
+- ✅ Python Bindings - Basic API interface
+- ✅ Monitoring System - Basic metrics collection
+- ✅ Model Execution Framework - Core implementation
+- ✅ Inference Pipeline - Basic pipeline structure
+- ✅ Dynamic Batch Processing - Initial implementation
 
-### Planned
-- Model implementations (GPT, BERT)
-- Weight management system
-- Model format conversion
-- Custom model support
-- Automatic mixed precision
-- Dynamic shape support
-- Operator fusion
-- Auto-tuning system
+### In Progress 🚧
+- 🔄 Computation Graph System - Basic graph operations
+- 🔄 Distributed Computing Support - Basic infrastructure
+
+### Planned Features 🎯
+- 📋 Advanced Model Support
+  - LLM implementations (GPT, BERT, GEMINI)
+  - Custom model architecture support
+  - Model format conversion utilities
+- 📋 Performance Optimization
+  - Advanced memory management
+  - Automatic mixed precision
+  - Dynamic shape support
+  - Operator fusion
+  - Auto-tuning system
+- 📋 Advanced Features
+  - Streaming generation
+  - Advanced batching strategies
+  - Weight quantization
+  - Multi-GPU support
+  - Advanced caching system
 
 ## Benchmarking Tools
 
