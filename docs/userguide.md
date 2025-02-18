@@ -4,7 +4,7 @@ This manual will guide users through the basic process of using the engine and c
 
 **User Manual: DeepPowers Inference Engine**
 
-**Version:** 1.0 (Initial Release - You can update this version number as you release updates)
+**Version:** 0.1.0
 **Date:** February 5, 2025
 
 ---
@@ -104,7 +104,7 @@ If you see "DeepPowers Inference Engine initialized successfully!", your install
 
 **3. Core Concepts**
 
-Understanding these core concepts is essential for using the LLM Inference Engine effectively.
+Understanding these core concepts is essential for using the DeepPowers LLM Inference Engine effectively.
 
 *   **Model:** Represents the pre-trained Large Language Model you want to execute for inference. Models are typically loaded from files in formats like ONNX, or framework-specific formats (if supported).
 *   **Configuration:** Defines the settings for the inference engine, including hardware selection, optimization options, quantization parameters, batching strategies, and more. Configurations are typically loaded from configuration files or set programmatically through the API.
@@ -168,46 +168,102 @@ int main() {
 
 **4.2 Python API Usage**
 
-**(Example Python code snippets - Replace placeholders with actual API names and paths)**
-
+### Basic Usage
 ```python
-import inference_engine_python_api as ie_api # Replace with actual Python API module name
+import deeppowers as dp
 
-try:
-    # 1. Create Engine instance
-    engine = ie_api.Engine()
+# Method 1: Using Pipeline (Recommended)
+# Initialize pipeline with pre-trained model
+pipeline = dp.Pipeline.from_pretrained("deepseek-v3")
 
-    # 2. Load Model from file
-    model_path = "path/to/your/model.onnx" # Replace with your model path
-    model = engine.load_model(model_path)
+# Generate text
+response = pipeline.generate(
+    "Hello, how are you?",
+    max_length=50,
+    temperature=0.7,
+    top_p=0.9
+)
+print(response)
 
-    # 3. Create Configuration
-    config = ie_api.Configuration()
-    config.device_type = ie_api.DeviceType.GPU # Run on GPU
-    config.optimization_level = ie_api.OptimizationLevel.HIGH # Enable high optimization
-    # ... more configuration settings ...
+# Batch processing
+responses = pipeline.generate(
+    ["Hello!", "How are you?"],
+    max_length=50,
+    temperature=0.7
+)
 
-    # 4. Create Inference Session
-    session = engine.create_session(model, config)
+# Save and load pipeline
+pipeline.save("my_pipeline")
+loaded_pipeline = dp.Pipeline.load("my_pipeline")
 
-    # 5. Prepare Input Data (Tokenized input IDs - NumPy array)
-    import numpy as np
-    input_ids = np.array([[101, 2023, 2003, 1037, 1200, 102]], dtype=np.int32) # Example input IDs
-    input_tensor = ie_api.Tensor(input_ids) # Create tensor from NumPy array
+# Method 2: Using Tokenizer and Model separately
+# Initialize tokenizer
+tokenizer = dp.Tokenizer(model_name="deepseek-v3")  # or use custom vocab
+tokenizer.load("path/to/tokenizer.model")
 
-    # 6. Run Inference
-    output_tensors = session.run({"input_ids": input_tensor}) # Assuming input name is "input_ids"
+# Initialize model
+model = dp.Model.from_pretrained("deepseek-v3")
 
-    # 7. Process Output Tensor
-    output_tensor = output_tensors["output"] # Assuming output name is "output"
-    output_data = output_tensor.data # Get NumPy array of output data
-    # ... process output_data, decode tokens, etc. ...
-
-    print("Inference completed successfully!")
-
-except Exception as e:
-    print(f"Inference Error: {e}")
+# Create pipeline manually
+pipeline = dp.Pipeline(model=model, tokenizer=tokenizer)
 ```
+
+### Advanced Usage
+
+#### Custom Tokenizer Training
+```python
+# Initialize tokenizer with specific type
+tokenizer = dp.Tokenizer(tokenizer_type=dp.TokenizerType.WORDPIECE)
+
+# Train on custom data
+texts = ["your", "training", "texts"]
+tokenizer.train(texts, vocab_size=30000, min_frequency=2)
+
+# Save and load
+tokenizer.save("tokenizer.model")
+tokenizer.load("tokenizer.model")
+
+# Basic tokenization
+tokens = tokenizer.encode("Hello, world!")
+text = tokenizer.decode(tokens)
+
+# Batch processing with parallel execution
+texts = ["multiple", "texts", "for", "processing"]
+tokens_batch = tokenizer.encode_batch(
+    texts,
+    add_special_tokens=True,
+    padding=True,
+    max_length=128
+)
+```
+
+#### Advanced Generation Control
+```python
+# Configure generation parameters
+response = pipeline.generate(
+    "Write a story about",
+    max_length=200,          # Maximum length of generated text
+    min_length=50,           # Minimum length of generated text
+    temperature=0.7,         # Controls randomness (higher = more random)
+    top_k=50,               # Limits vocabulary to top k tokens
+    top_p=0.9,              # Nucleus sampling threshold
+    num_return_sequences=3,  # Number of different sequences to generate
+    repetition_penalty=1.2   # Penalize repeated tokens
+)
+
+# Batch generation with multiple prompts
+prompts = [
+    "Write a story about",
+    "Explain quantum physics",
+    "Give me a recipe for"
+]
+responses = pipeline.generate(
+    prompts,
+    max_length=100,
+    temperature=0.8
+)
+```
+
 
 **5. Configuration Options**
 
@@ -235,8 +291,6 @@ Refer to the API documentation for a complete list of configuration options and 
 
 **7. Performance Tuning**
 
-To achieve optimal inference performance, consider the following tuning tips:
-
 *   **Hardware Selection:**  Choose the appropriate hardware device (`device_type`) based on your performance requirements and model size. GPUs generally offer higher performance for LLMs.
 *   **Optimization Level:**  Experiment with different `optimization_level` settings. `High` optimization usually provides the best performance but might increase model loading and compilation time.
 *   **Quantization:**  Enable quantization (`quantization_type`) to reduce memory footprint and potentially accelerate inference, especially for large models. Carefully evaluate accuracy after quantization.
@@ -245,8 +299,6 @@ To achieve optimal inference performance, consider the following tuning tips:
 *   **Profiling Tools:**  Utilize profiling tools (e.g., NVIDIA Nsight Systems, AMD ROCm Profiler, Intel VTune) to identify performance bottlenecks and guide optimization efforts.
 
 **8. Troubleshooting**
-
-**(Provide common troubleshooting tips and error messages with solutions. Examples below)**
 
 *   **"Engine initialization failed" Error:**
     *   **Possible Cause:**  Incorrect hardware drivers, missing dependencies, or incompatible hardware.
@@ -258,18 +310,16 @@ To achieve optimal inference performance, consider the following tuning tips:
     *   **Possible Cause:**  Model too large for GPU memory, large batch size, or insufficient memory pool size.
     *   **Solution:**  Try reducing batch size, enabling quantization, using a smaller model (if possible), or increasing `memory_pool_size` (if applicable).
 
-**(Add more specific troubleshooting tips based on potential issues in your engine)**
 
 **9. Examples**
-
-**(Include links to example code or provide more detailed examples within the manual showcasing different use cases: text generation, question answering, etc.)**
 
 *   **Example 1: Basic Text Generation (C++ and Python)**
 *   **Example 2: Question Answering with Context (C++ and Python)**
 *   **Example 3: Using Custom Kernels (if applicable)**
 *   **Example 4: Performance Benchmarking Script**
 
-**(Link to a dedicated examples directory in your repository if available.)**
+for example:
+[examples](https://github.com/deeppowers/deeppowers/tree/main/examples)
 
 **10. API Reference**
 
@@ -289,18 +339,11 @@ To achieve optimal inference performance, consider the following tuning tips:
     *   **A:** Start with `OptimizationLevel.High` for best performance. If model loading time is a concern, you can try `OptimizationLevel.Medium` or `Low`. `OptimizationLevel.None` disables optimizations and is mainly for debugging.
 *   **Q: How do I enable quantization?**
     *   **A:** Set the `quantization_type` configuration option to your desired quantization type (e.g., `QuantizationType.INT8`). Ensure your model is compatible with quantization or perform quantization-aware training.
-*   **(… Add more FAQs based on potential user inquiries …)**
 
-**12. Contributing (If Open Source)**
+**12. Contributing
 
-**(If your project is open source, include a section on how to contribute.)**
-
-We welcome contributions to the LLM Inference Engine! Please refer to the `CONTRIBUTING.md` file in the repository for guidelines on contributing code, bug reports, feature requests, and documentation improvements.
+We welcome contributions to the DeepPowers LLM Inference Engine! Please refer to the `CONTRIBUTING.md` file in the repository for guidelines on contributing code, bug reports, feature requests, and documentation improvements.
 
 **13. License**
 
-This LLM Inference Engine is released under the [Your License Name] License. See the `LICENSE` file in the repository for the full license text.
-
----
-
-This user manual provides a comprehensive guide to using your LLM Inference Engine. Remember to replace the placeholder information with the actual details of your engine, API names, configuration options, and examples.  Continuously update this manual as you add new features and improve the engine. Good documentation is crucial for user adoption and success!
+This LLM Inference Engine is released under the Apache License 2.0. See the `LICENSE` file in the repository for the full license text.
