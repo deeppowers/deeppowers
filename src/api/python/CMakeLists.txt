@@ -1,32 +1,31 @@
-# Python bindings module
-pybind11_add_module(_deeppowers
-    deeppowers/bindings.cpp
+cmake_minimum_required(VERSION 3.15)
+project(deeppowers_python)
+
+# Find Python
+find_package(Python 3.8 REQUIRED COMPONENTS Interpreter Development)
+find_package(pybind11 CONFIG REQUIRED)
+
+# Add Python module
+pybind11_add_module(_deeppowers_core
+    deeppowers/cpp/bindings.cpp
 )
 
-# Link dependencies
-target_link_libraries(_deeppowers
-    PRIVATE
-        deeppowers
+# Link against core library
+target_link_libraries(_deeppowers_core PRIVATE deeppowers_core)
+
+# Include directories
+target_include_directories(_deeppowers_core PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/common
 )
 
-# Set module properties
-set_target_properties(_deeppowers PROPERTIES
-    OUTPUT_NAME "_deeppowers"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/deeppowers"
+# Set output directory
+set_target_properties(_deeppowers_core PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deeppowers
 )
 
-# Install Python package
-install(DIRECTORY deeppowers
-    DESTINATION ${PYTHON_SITE_PACKAGES}
-    FILES_MATCHING
-        PATTERN "*.py"
-        PATTERN "*.so"
-        PATTERN "__pycache__" EXCLUDE
-)
-
-# Copy Python package to build directory
-add_custom_command(TARGET _deeppowers POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/deeppowers
-        ${CMAKE_BINARY_DIR}/python/deeppowers
+# Install rules
+install(TARGETS _deeppowers_core DESTINATION deeppowers)
+install(DIRECTORY deeppowers DESTINATION .
+    FILES_MATCHING PATTERN "*.py"
 )

@@ -181,10 +181,51 @@ make -j$(nproc)
 
 ## Quick Start
 
+### Basic Usage
 ```python
 import deeppowers as dp
 
+# Method 1: Using Pipeline (Recommended)
+# Initialize pipeline with pre-trained model
+pipeline = dp.Pipeline.from_pretrained("deepseek-v3")
+
+# Generate text
+response = pipeline.generate(
+    "Hello, how are you?",
+    max_length=50,
+    temperature=0.7,
+    top_p=0.9
+)
+print(response)
+
+# Batch processing
+responses = pipeline.generate(
+    ["Hello!", "How are you?"],
+    max_length=50,
+    temperature=0.7
+)
+
+# Save and load pipeline
+pipeline.save("my_pipeline")
+loaded_pipeline = dp.Pipeline.load("my_pipeline")
+
+# Method 2: Using Tokenizer and Model separately
 # Initialize tokenizer
+tokenizer = dp.Tokenizer(model_name="deepseek-v3")  # or use custom vocab
+tokenizer.load("path/to/tokenizer.model")
+
+# Initialize model
+model = dp.Model.from_pretrained("deepseek-v3")
+
+# Create pipeline manually
+pipeline = dp.Pipeline(model=model, tokenizer=tokenizer)
+```
+
+### Advanced Usage
+
+#### Custom Tokenizer Training
+```python
+# Initialize tokenizer with specific type
 tokenizer = dp.Tokenizer(tokenizer_type=dp.TokenizerType.WORDPIECE)
 
 # Train on custom data
@@ -195,13 +236,45 @@ tokenizer.train(texts, vocab_size=30000, min_frequency=2)
 tokenizer.save("tokenizer.model")
 tokenizer.load("tokenizer.model")
 
-# Basic usage
+# Basic tokenization
 tokens = tokenizer.encode("Hello, world!")
 text = tokenizer.decode(tokens)
 
 # Batch processing with parallel execution
 texts = ["multiple", "texts", "for", "processing"]
-tokens_batch = tokenizer.encode_batch_parallel(texts, batch_size=32)
+tokens_batch = tokenizer.encode_batch(
+    texts,
+    add_special_tokens=True,
+    padding=True,
+    max_length=128
+)
+```
+
+#### Advanced Generation Control
+```python
+# Configure generation parameters
+response = pipeline.generate(
+    "Write a story about",
+    max_length=200,          # Maximum length of generated text
+    min_length=50,           # Minimum length of generated text
+    temperature=0.7,         # Controls randomness (higher = more random)
+    top_k=50,               # Limits vocabulary to top k tokens
+    top_p=0.9,              # Nucleus sampling threshold
+    num_return_sequences=3,  # Number of different sequences to generate
+    repetition_penalty=1.2   # Penalize repeated tokens
+)
+
+# Batch generation with multiple prompts
+prompts = [
+    "Write a story about",
+    "Explain quantum physics",
+    "Give me a recipe for"
+]
+responses = pipeline.generate(
+    prompts,
+    max_length=100,
+    temperature=0.8
+)
 ```
 
 ## Performance Tuning

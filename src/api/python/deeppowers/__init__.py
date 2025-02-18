@@ -2,11 +2,15 @@
 DeepPowers - High Performance Text Generation Library
 """
 
+from .tokenizer import Tokenizer
 from .model import Model, GenerationConfig, GenerationResult
+from .pipeline import Pipeline
 from .version import __version__
 
 __all__ = [
+    'Tokenizer',
     'Model',
+    'Pipeline',
     'GenerationConfig',
     'GenerationResult',
     'load_model',
