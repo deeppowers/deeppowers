@@ -6,6 +6,19 @@ import time
 import _deeppowers_core
 import numpy as np
 
+try:
+    import _deeppowers_core
+except ImportError:
+    print("Warning: _deeppowers_core not found, using mock implementation")
+    class MockCore:
+        def __init__(self):
+            pass
+        def load_model(self, *args, **kwargs):
+            return self
+        def get_config(self, *args, **kwargs):
+            return {"model_type": "mock", "vocab_size": 50257}
+    _deeppowers_core = MockCore()
+
 @dataclass
 class GenerationConfig:
     """Configuration for text generation."""
