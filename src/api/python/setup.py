@@ -18,7 +18,7 @@ setup(
         "torch>=1.8.0",  # Optional: only needed for PyTorch model support
     ],
     author="DeepPowers Team",
-    author_email="team@deeppowers.ai",
+    author_email="support@deeppowers.xyz",
     description="High-performance inference engine for large language models",
     long_description=long_description,
     long_description_content_type="text/markdown",
