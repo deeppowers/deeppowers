@@ -7,7 +7,7 @@ find_package(pybind11 CONFIG REQUIRED)
 
 # Add Python module
 pybind11_add_module(_deeppowers_core
-    deeppowers/cpp/bindings.cpp
+    deeppowers/bindings.cpp
 )
 
 # Link against core library
@@ -15,8 +15,8 @@ target_link_libraries(_deeppowers_core PRIVATE deeppowers_core)
 
 # Include directories
 target_include_directories(_deeppowers_core PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/common
+    ${CMAKE_SOURCE_DIR}/src/core/include
+    ${CMAKE_SOURCE_DIR}/src/common/include
 )
 
 # Set output directory

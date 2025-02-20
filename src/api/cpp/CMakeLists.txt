@@ -1,5 +1,5 @@
 # C++ API library
-add_library(deeppowers
+add_library(deeppowers SHARED
     src/deeppowers.cpp
 )
 
@@ -15,11 +15,7 @@ target_include_directories(deeppowers
 # Link dependencies
 target_link_libraries(deeppowers
     PUBLIC
-        deeppowers::core
-        CUDA::cudart
-        OpenSSL::SSL
-        OpenSSL::Crypto
-        nlohmann_json::nlohmann_json
+        deeppowers_core
 )
 
 # Set library properties

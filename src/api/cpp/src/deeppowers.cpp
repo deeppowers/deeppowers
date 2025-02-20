@@ -2,6 +2,7 @@
 #include "../../core/execution/model.hpp"
 #include "../../core/execution/models/gpt_model.hpp"
 #include <cuda_runtime.h>
+#include "utils.hpp"
 
 namespace deeppowers {
 namespace api {

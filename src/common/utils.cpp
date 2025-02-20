@@ -274,5 +274,9 @@ template std::vector<std::vector<float>> MathUtils::matrix_multiply<float>(
     const std::vector<std::vector<float>>&,
     const std::vector<std::vector<float>>&);
 
+std::string get_version() {
+    return "0.1.0";
+}
+
 } // namespace common
 } // namespace deeppowers 

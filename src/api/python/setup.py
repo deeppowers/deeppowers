@@ -1,21 +1,20 @@
 from setuptools import setup, find_packages
+import os
 
-# Read version from version.py
-with open("deeppowers/version.py") as f:
-    exec(f.read())
+# Read version information
+version = "0.1.0"
 
-# Read README.md
-with open("README.md", encoding="utf-8") as f:
+# Read README
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
     name="deeppowers",
-    version="0.1.0",
+    version=version,
     packages=find_packages(),
     install_requires=[
-        "numpy>=1.20.0",
-        "pybind11>=2.6.0",
-        "torch>=1.8.0",  # Optional: only needed for PyTorch model support
+        "numpy>=1.21.0",
+        "pybind11>=2.10.0",
     ],
     author="DeepPowers Team",
     author_email="support@deeppowers.xyz",
