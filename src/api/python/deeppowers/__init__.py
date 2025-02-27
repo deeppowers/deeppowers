@@ -9,7 +9,7 @@ from .version import __version__
 import os
 from pathlib import Path
 import json
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 try:
     import _deeppowers_core
@@ -24,6 +24,10 @@ except ImportError:
             return False
         def get_cuda_device_count(self):
             return 0
+        def load_model(self, path, format=0):
+            return None
+        def convert_model(self, input_path, output_path, input_format, output_format):
+            pass
     _deeppowers_core = MockCore()
 
 __all__ = [
@@ -35,6 +39,7 @@ __all__ = [
     'load_model',
     'list_available_models',
     'is_model_available',
+    'convert_model',
     'version',
     'cuda_version',
     'cuda_available',
@@ -106,11 +111,14 @@ def _scan_models() -> Dict[str, Dict[str, Any]]:
 # Dynamic model discovery
 _AVAILABLE_MODELS = _scan_models()
 
-def load_model(model_path: str) -> Model:
+def load_model(model_path: str, format: str = "auto", device: str = "cuda", dtype: str = "float16") -> Model:
     """Load a model from the specified path.
     
     Args:
         model_path: Path to the model directory or model name
+        format: Model format ('auto', 'onnx', 'pytorch', 'tensorflow', 'custom')
+        device: Device to load the model on ('cpu' or 'cuda')
+        dtype: Data type for model weights ('float32', 'float16', 'int8', 'int4')
     
     Returns:
         Model: Loaded model instance
@@ -123,14 +131,88 @@ def load_model(model_path: str) -> Model:
         # Load from specific path
         model = load_model('/path/to/my/model')
         
+        # Load with specific format
+        model = load_model('/path/to/my/model', format='onnx')
+        
         # Load with custom configuration
         os.environ['DEEPPOWERS_MODELS_PATH'] = '/path/to/models'
-        model = load_model('your-model-name')
+        model = load_model('your-model-name', device='cpu', dtype='float32')
         ```
     """
-    return Model.from_pretrained(model_path)
+    # Check if model_path is a model name in available models
+    global _AVAILABLE_MODELS
+    if model_path in _AVAILABLE_MODELS:
+        model_path = _AVAILABLE_MODELS[model_path]['path']
+    
+    # Convert format string to ModelFormat enum
+    format_map = {
+        "auto": _deeppowers_core.ModelFormat.AUTO,
+        "onnx": _deeppowers_core.ModelFormat.ONNX,
+        "pytorch": _deeppowers_core.ModelFormat.PYTORCH,
+        "tensorflow": _deeppowers_core.ModelFormat.TENSORFLOW,
+        "custom": _deeppowers_core.ModelFormat.CUSTOM
+    }
+    format_cpp = format_map.get(format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    
+    try:
+        # Load model using C++ backend
+        cpp_model = _deeppowers_core.load_model(model_path, format_cpp)
+        
+        # Create Python model wrapper
+        model = Model()
+        model._model = cpp_model
+        model._device = device
+        model._config = cpp_model.config()
+        model._model_type = cpp_model.model_type()
+        model._vocab_size = int(model._config.get("vocab_size", 0))
+        model._max_sequence_length = int(model._config.get("max_sequence_length", 2048))
+        
+        # Move model to specified device if needed
+        if cpp_model.device() != device:
+            cpp_model.to(device)
+        
+        return model
+    except Exception as e:
+        print(f"Warning: Failed to load model using C++ backend: {e}")
+        print("Falling back to Python implementation")
+        return Model.from_pretrained(model_path, device=device, dtype=dtype)
 
-def list_available_models() -> list[str]:
+def convert_model(input_path: str, output_path: str, input_format: str, output_format: str) -> None:
+    """Convert a model between formats.
+    
+    Args:
+        input_path: Path to input model
+        output_path: Path to output model
+        input_format: Input model format ('onnx', 'pytorch', 'tensorflow', 'custom')
+        output_format: Output model format ('onnx', 'pytorch', 'tensorflow', 'custom')
+    
+    Examples:
+        ```python
+        # Convert PyTorch model to ONNX
+        convert_model('model.pt', 'model.onnx', 'pytorch', 'onnx')
+        
+        # Convert TensorFlow model to PyTorch
+        convert_model('model.pb', 'model.pt', 'tensorflow', 'pytorch')
+        ```
+    """
+    # Convert format strings to ModelFormat enum
+    format_map = {
+        "auto": _deeppowers_core.ModelFormat.AUTO,
+        "onnx": _deeppowers_core.ModelFormat.ONNX,
+        "pytorch": _deeppowers_core.ModelFormat.PYTORCH,
+        "tensorflow": _deeppowers_core.ModelFormat.TENSORFLOW,
+        "custom": _deeppowers_core.ModelFormat.CUSTOM
+    }
+    
+    input_format_cpp = format_map.get(input_format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    output_format_cpp = format_map.get(output_format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    
+    try:
+        _deeppowers_core.convert_model(input_path, output_path, input_format_cpp, output_format_cpp)
+    except Exception as e:
+        raise RuntimeError(f"Failed to convert model: {e}")
+
+def list_available_models() -> List[str]:
     """List all available models.
     
     Returns:
