@@ -52,6 +52,13 @@ DeepPowers is a high-performance tokenizer implementation with memory optimizati
 - Monitoring middleware
 - Error handling middleware
 
+### Inference Optimization
+- Model operator fusion
+- Weight pruning techniques
+- KV-cache optimization
+- Automatic optimization selection
+- Performance profiling and benchmarking
+
 ## Architecture
 
 ### Technical Architecture Diagram
@@ -277,30 +284,40 @@ responses = pipeline.generate(
 )
 ```
 
+#### Model Optimization
+```python
+# Load model
+model = dp.load_model("deepseek-v3", device="cuda", dtype="float16")
+
+# Apply automatic optimization
+results = dp.optimize_model(model, optimization_type="auto", level="o2", enable_profiling=True)
+print(f"Achieved speedup: {results['speedup']}x")
+print(f"Memory reduction: {results['memory_reduction']}%")
+
+# Apply specific optimization techniques
+results = dp.optimize_model(model, optimization_type="fusion")
+results = dp.optimize_model(model, optimization_type="pruning")
+results = dp.optimize_model(model, optimization_type="caching")
+
+# Quantize model to INT8 precision
+results = dp.quantize_model(model, precision="int8")
+print(f"INT8 quantization speedup: {results['speedup']}x")
+print(f"Accuracy loss: {results['accuracy_loss']}%")
+
+# Run benchmarks
+benchmark_results = dp.benchmark_model(
+    model, 
+    input_text="This is a test input for benchmarking.",
+    num_runs=10, 
+    warmup_runs=3
+)
+print(f"Average latency: {benchmark_results['avg_latency_ms']} ms")
+print(f"Throughput: {benchmark_results['throughput_tokens_per_sec']} tokens/sec")
+```
+
 ## Performance Tuning
 
 ### Memory Optimization
-```python
-# Configure memory pool
-tokenizer.set_memory_pool_size(4096)  # 4KB blocks
-tokenizer.enable_string_pooling(True)
-
-# Monitor memory usage
-stats = tokenizer.get_memory_stats()
-print(f"Memory pool usage: {stats['pool_usage']}MB")
-print(f"String pool size: {stats['string_pool_size']}")
-```
-
-### Parallel Processing
-```python
-# Configure thread pool
-tokenizer.set_num_threads(8)
-tokenizer.set_batch_size(64)
-
-# Process large datasets
-with open("large_file.txt", "r") as f:
-    texts = f.readlines()
-tokens = tokenizer.encode_batch_parallel(texts)
 ```
 
 ## Documentation
@@ -317,6 +334,9 @@ DeepPowers includes several performance optimization features:
 - Parallel processing
 - Mixed-precision computation
 - Distributed inference
+- Model quantization (INT8, INT4, mixed precision)
+- Operator fusion
+- KV-cache optimization
 
 ## Roadmap
 
@@ -331,28 +351,35 @@ DeepPowers includes several performance optimization features:
 - ✅ Model Execution Framework - Core implementation
 - ✅ Inference Pipeline - Basic pipeline structure
 - ✅ Dynamic Batch Processing - Initial implementation
+- ✅ Model Loading System - Support for ONNX, PyTorch, and TensorFlow formats
+- ✅ Inference Engine - Complete implementation with text generation capabilities
+- ✅ Inference Optimization - Operator fusion, weight pruning, and caching optimizations
+- ✅ Quantization System - INT8, INT4, and mixed precision support
+- ✅ Benchmarking Tools - Performance measurement and optimization metrics
+- ✅ Streaming Generation - Real-time text generation with callback support
+- ✅ Advanced Batching Strategies - Batch processing with parallel inference
 
 ### In Progress 🚧
-- 🔄 Computation Graph System - Basic graph operations
-- 🔄 Distributed Computing Support - Basic infrastructure
+- 🔄 Computation Graph System - Advanced graph optimizations
+- 🔄 Distributed Computing Support - Multi-node inference
+- 🔄 Auto-tuning System - Automatic performance optimization
+- 🔄 Dynamic Shape Support - Flexible tensor dimensions handling
 
 ### Planned Features 🎯
 - 📋 Advanced Model Support
-  - LLM implementations (GPT, BERT, GEMINI)
-  - Custom model architecture support
-  - Model format conversion utilities
+  - Advanced LLM implementations (GPT, Gemini, Claude)
+  - More sophisticated model architecture support
+  - Model compression and distillation
 - 📋 Performance Optimization
   - Advanced memory management
-  - Automatic mixed precision
-  - Dynamic shape support
-  - Operator fusion
-  - Auto-tuning system
+  - Kernel fusion optimizations
+  - Custom CUDA kernels for critical operations
 - 📋 Advanced Features
-  - Streaming generation
-  - Advanced batching strategies
-  - Weight quantization
-  - Multi-GPU support
-  - Advanced caching system
+  - Multi-GPU parallelism
+  - Distributed inference across nodes
+  - Advanced caching system with prefetching
+  - Speculative decoding
+  - Custom operator implementation
 
 ## Benchmarking Tools
 
@@ -360,15 +387,17 @@ The project includes comprehensive benchmarking tools:
 
 ```bash
 # Run performance benchmark
-python scripts/benchmark.py --tokenizer model.bin --input test.txt
+python examples/optimize_and_benchmark.py --model your-model --benchmark
 
-# Monitor memory usage
-python scripts/memory_monitor.py --tokenizer model.bin --duration 60
+# Run with optimization
+python examples/optimize_and_benchmark.py --model your-model --optimization auto --level o2 --benchmark
 
-# Process large datasets
-python scripts/batch_process.py --input data/ --output results/
+# Apply quantization
+python examples/optimize_and_benchmark.py --model your-model --quantize --quantize-precision int8 --benchmark
+
+# Generate text with optimized model
+python examples/optimize_and_benchmark.py --model your-model --optimization auto --generate --prompt "Your prompt here"
 ```
-
 
 ## Contributing
 
@@ -377,7 +406,6 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
 
 ## Acknowledgments
 
