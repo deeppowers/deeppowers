@@ -318,6 +318,28 @@ print(f"Throughput: {benchmark_results['throughput_tokens_per_sec']} tokens/sec"
 ## Performance Tuning
 
 ### Memory Optimization
+```python
+# Configure memory pool
+tokenizer.set_memory_pool_size(4096)  # 4KB blocks
+tokenizer.enable_string_pooling(True)
+
+# Monitor memory usage
+stats = tokenizer.get_memory_stats()
+print(f"Memory pool usage: {stats['pool_usage']}MB")
+print(f"String pool size: {stats['string_pool_size']}")
+```
+
+### Parallel Processing
+```python
+# Configure thread pool
+tokenizer.set_num_threads(8)
+tokenizer.set_batch_size(64)
+
+# Process large datasets
+with open("large_file.txt", "r") as f:
+    texts = f.readlines()
+tokens = tokenizer.encode_batch_parallel(texts)
+```
 
 ## Documentation
 
