@@ -318,7 +318,6 @@ print(f"Throughput: {benchmark_results['throughput_tokens_per_sec']} tokens/sec"
 ## Performance Tuning
 
 ### Memory Optimization
-```
 
 ## Documentation
 
