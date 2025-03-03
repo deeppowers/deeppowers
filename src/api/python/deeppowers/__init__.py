@@ -2,14 +2,14 @@
 DeepPowers - High Performance Text Generation Library
 """
 
-from .tokenizer import Tokenizer
+from .tokenizer import Tokenizer, TokenizerType
 from .model import Model, GenerationConfig, GenerationResult
 from .pipeline import Pipeline
 from .version import __version__
 import os
 from pathlib import Path
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 try:
     import _deeppowers_core
@@ -19,7 +19,7 @@ except ImportError:
         def __init__(self):
             pass
         def get_cuda_version(self):
-            return "0.0.0"
+            return "11.7"
         def is_cuda_available(self):
             return False
         def get_cuda_device_count(self):
@@ -28,6 +28,27 @@ except ImportError:
             return None
         def convert_model(self, input_path, output_path, input_format, output_format):
             pass
+        def optimize_model(self, model, optimization_type=0, level=1):
+            return {"success": False, "error_message": "C++ backend not available"}
+        class ModelFormat:
+            AUTO = 0
+            ONNX = 1
+            PYTORCH = 2
+            TENSORFLOW = 3
+            CUSTOM = 4
+        class OptimizerType:
+            NONE = 0
+            FUSION = 1
+            PRUNING = 2
+            DISTILLATION = 3
+            QUANTIZATION = 4
+            CACHING = 5
+            AUTO = 6
+        class OptimizationLevel:
+            NONE = 0
+            O1 = 1
+            O2 = 2
+            O3 = 3
     _deeppowers_core = MockCore()
 
 __all__ = [
@@ -44,106 +65,70 @@ __all__ = [
     'cuda_version',
     'cuda_available',
     'cuda_device_count',
+    'optimize_model',
+    'quantize_model',
+    'benchmark_model',
+    'get_model_config',
 ]
+
+# Get models directory from environment variable or use default
+MODELS_DIR = os.environ.get("DEEPPOWERS_MODELS_PATH", str(Path.home() / ".deeppowers" / "models"))
 
 def _scan_models() -> Dict[str, Dict[str, Any]]:
     """Scan for available models in the models directory.
     
-    The function looks for models in the directory specified by DEEPPOWERS_MODELS_PATH
-    environment variable, or falls back to 'models' directory in current path.
-    
-    Expected directory structure:
-    ```
-    models/
-    ├── model1/
-    │   ├── config.json      # Model configuration
-    │   ├── model.bin        # Model weights
-    │   └── tokenizer.json   # Tokenizer configuration
-    └── model2/
-        ├── config.json
-        ├── model.bin
-        └── tokenizer.json
-    ```
-    
-    Each model directory must contain a config.json file with at least:
-    ```json
-    {
-        "model_type": "deepseek-v3",              # Model architecture type
-        "description": "Model description", # Optional description
-        "vocab_size": 67109856,               # Vocabulary size 671B
-        "max_position_embeddings": 1024     # Maximum sequence length
-    }
-    ```
+    Returns:
+        Dictionary mapping model names to their configurations.
     """
     models = {}
     
-    # Check environment variable for models path
-    models_path = os.getenv('DEEPPOWERS_MODELS_PATH', 'models')
-    if not os.path.exists(models_path):
-        return models
-        
-    # Scan all subdirectories in models path
-    for model_dir in Path(models_path).iterdir():
+    # Create models directory if it doesn't exist
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    
+    # Scan for model directories
+    for model_dir in Path(MODELS_DIR).iterdir():
         if not model_dir.is_dir():
             continue
             
         # Check for config.json
-        config_file = model_dir / 'config.json'
-        if not config_file.exists():
+        config_path = model_dir / "config.json"
+        if not config_path.exists():
             continue
             
         try:
-            with open(config_file, 'r') as f:
+            # Load config
+            with open(config_path, "r") as f:
                 config = json.load(f)
                 
-            model_name = model_dir.name
-            models[model_name] = {
-                'path': str(model_dir),
-                'type': config.get('model_type', 'unknown'),
-                'description': config.get('description', ''),
-                'config': config
+            # Add to models dictionary
+            models[model_dir.name] = {
+                "path": str(model_dir),
+                "config": config
             }
         except Exception as e:
-            print(f"Warning: Failed to load model config from {config_file}: {e}")
+            print(f"Error loading model config for {model_dir.name}: {e}")
             
     return models
 
-# Dynamic model discovery
-_AVAILABLE_MODELS = _scan_models()
+# Scan for available models
+AVAILABLE_MODELS = _scan_models()
 
 def load_model(model_path: str, format: str = "auto", device: str = "cuda", dtype: str = "float16") -> Model:
-    """Load a model from the specified path.
+    """Load a model from a file or directory.
     
     Args:
-        model_path: Path to the model directory or model name
-        format: Model format ('auto', 'onnx', 'pytorch', 'tensorflow', 'custom')
-        device: Device to load the model on ('cpu' or 'cuda')
-        dtype: Data type for model weights ('float32', 'float16', 'int8', 'int4')
-    
+        model_path: Path to model file or directory.
+        format: Model format ("auto", "onnx", "pytorch", "tensorflow").
+        device: Device to load model on ("cpu", "cuda").
+        dtype: Data type for model weights ("float32", "float16", "int8", "int4").
+        
     Returns:
-        Model: Loaded model instance
-    
-    Examples:
-        ```python
-        # Load by model name
-        model = load_model('your-model-name')
-        
-        # Load from specific path
-        model = load_model('/path/to/my/model')
-        
-        # Load with specific format
-        model = load_model('/path/to/my/model', format='onnx')
-        
-        # Load with custom configuration
-        os.environ['DEEPPOWERS_MODELS_PATH'] = '/path/to/models'
-        model = load_model('your-model-name', device='cpu', dtype='float32')
-        ```
+        Loaded model.
     """
-    # Check if model_path is a model name in available models
-    global _AVAILABLE_MODELS
-    if model_path in _AVAILABLE_MODELS:
-        model_path = _AVAILABLE_MODELS[model_path]['path']
-    
+    # Check if model_path is a known model name
+    if model_path in AVAILABLE_MODELS:
+        model_path = AVAILABLE_MODELS[model_path]["path"]
+        
     # Convert format string to ModelFormat enum
     format_map = {
         "auto": _deeppowers_core.ModelFormat.AUTO,
@@ -152,50 +137,34 @@ def load_model(model_path: str, format: str = "auto", device: str = "cuda", dtyp
         "tensorflow": _deeppowers_core.ModelFormat.TENSORFLOW,
         "custom": _deeppowers_core.ModelFormat.CUSTOM
     }
-    format_cpp = format_map.get(format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    
+    format_enum = format_map.get(format.lower(), _deeppowers_core.ModelFormat.AUTO)
     
     try:
-        # Load model using C++ backend
-        cpp_model = _deeppowers_core.load_model(model_path, format_cpp)
-        
-        # Create Python model wrapper
-        model = Model()
-        model._model = cpp_model
-        model._device = device
-        model._config = cpp_model.config()
-        model._model_type = cpp_model.model_type()
-        model._vocab_size = int(model._config.get("vocab_size", 0))
-        model._max_sequence_length = int(model._config.get("max_sequence_length", 2048))
-        
-        # Move model to specified device if needed
-        if cpp_model.device() != device:
-            cpp_model.to(device)
-        
+        # Try to load using C++ backend
+        model = Model.from_pretrained(model_path, device=device, dtype=dtype)
         return model
     except Exception as e:
-        print(f"Warning: Failed to load model using C++ backend: {e}")
+        print(f"Error loading model: {e}")
         print("Falling back to Python implementation")
-        return Model.from_pretrained(model_path, device=device, dtype=dtype)
+        
+        # Fallback to Python implementation
+        model = Model()
+        model._model_path = model_path
+        model._device = device
+        
+        return model
 
 def convert_model(input_path: str, output_path: str, input_format: str, output_format: str) -> None:
-    """Convert a model between formats.
+    """Convert a model from one format to another.
     
     Args:
-        input_path: Path to input model
-        output_path: Path to output model
-        input_format: Input model format ('onnx', 'pytorch', 'tensorflow', 'custom')
-        output_format: Output model format ('onnx', 'pytorch', 'tensorflow', 'custom')
-    
-    Examples:
-        ```python
-        # Convert PyTorch model to ONNX
-        convert_model('model.pt', 'model.onnx', 'pytorch', 'onnx')
-        
-        # Convert TensorFlow model to PyTorch
-        convert_model('model.pb', 'model.pt', 'tensorflow', 'pytorch')
-        ```
+        input_path: Path to input model file or directory.
+        output_path: Path to output model file or directory.
+        input_format: Input model format ("auto", "onnx", "pytorch", "tensorflow").
+        output_format: Output model format ("onnx", "pytorch", "tensorflow").
     """
-    # Convert format strings to ModelFormat enum
+    # Convert format strings to ModelFormat enums
     format_map = {
         "auto": _deeppowers_core.ModelFormat.AUTO,
         "onnx": _deeppowers_core.ModelFormat.ONNX,
@@ -204,71 +173,136 @@ def convert_model(input_path: str, output_path: str, input_format: str, output_f
         "custom": _deeppowers_core.ModelFormat.CUSTOM
     }
     
-    input_format_cpp = format_map.get(input_format.lower(), _deeppowers_core.ModelFormat.AUTO)
-    output_format_cpp = format_map.get(output_format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    input_format_enum = format_map.get(input_format.lower(), _deeppowers_core.ModelFormat.AUTO)
+    output_format_enum = format_map.get(output_format.lower(), _deeppowers_core.ModelFormat.ONNX)
     
     try:
-        _deeppowers_core.convert_model(input_path, output_path, input_format_cpp, output_format_cpp)
+        # Try to convert using C++ backend
+        _deeppowers_core.convert_model(input_path, output_path, input_format_enum, output_format_enum)
     except Exception as e:
-        raise RuntimeError(f"Failed to convert model: {e}")
+        raise RuntimeError(f"Error converting model: {e}")
 
-def list_available_models() -> List[str]:
-    """List all available models.
-    
-    Returns:
-        list[str]: List of available model names
-    
-    Examples:
-        ```python
-        # Set custom models directory
-        os.environ['DEEPPOWERS_MODELS_PATH'] = '/path/to/models'
-        
-        # List all available models
-        models = list_available_models()
-        print(f"Available models: {models}")
-        ```
-    """
-    global _AVAILABLE_MODELS
-    _AVAILABLE_MODELS = _scan_models()
-    return list(_AVAILABLE_MODELS.keys())
-
-def is_model_available(model_name: str) -> bool:
-    """Check if a model is available.
+def optimize_model(model: Model, 
+                  optimization_type: str = "auto", 
+                  level: str = "o1", 
+                  enable_profiling: bool = False) -> Dict[str, Any]:
+    """Optimize a model for inference.
     
     Args:
-        model_name: Name of the model to check
+        model: Model to optimize.
+        optimization_type: Type of optimization to apply. Options:
+            - "auto": Automatically select optimizations
+            - "fusion": Apply operator fusion
+            - "pruning": Apply weight pruning
+            - "quantization": Apply weight quantization
+            - "caching": Apply KV-cache optimization
+            - "none": No optimization
+        level: Optimization aggressiveness level. Options:
+            - "o1": Basic optimizations
+            - "o2": Medium optimizations
+            - "o3": Aggressive optimizations
+        enable_profiling: Whether to collect performance metrics
+        
+    Returns:
+        Dictionary with optimization results and metrics
+    """
+    return model.optimize(optimization_type, level, enable_profiling)
+
+def quantize_model(model: Model, precision: str = "int8") -> Dict[str, Any]:
+    """Apply quantization to a model.
+    
+    Args:
+        model: Model to quantize.
+        precision: Quantization precision. Options:
+            - "int8": 8-bit integer quantization
+            - "int4": 4-bit integer quantization
+            - "mixed": Mixed precision quantization
+            
+    Returns:
+        Dictionary with quantization results and metrics
+    """
+    return model.apply_quantization(precision)
+
+def benchmark_model(model: Model, 
+                   input_text: str = "Hello, world!", 
+                   num_runs: int = 10,
+                   warmup_runs: int = 3) -> Dict[str, float]:
+    """Benchmark model inference performance.
+    
+    Args:
+        model: Model to benchmark.
+        input_text: Text to use for benchmarking
+        num_runs: Number of inference runs to perform
+        warmup_runs: Number of warmup runs before benchmarking
+        
+    Returns:
+        Dictionary with benchmark results
+    """
+    return model.benchmark(input_text, num_runs, warmup_runs)
+
+def list_available_models() -> List[str]:
+    """List available pre-trained models.
     
     Returns:
-        bool: True if model is available, False otherwise
-    
-    Examples:
-        ```python
-        # Check if specific model is available
-        if is_model_available('your-model-name'):
-            model = load_model('your-model-name')
-            
-        # Check with custom models directory
-        os.environ['DEEPPOWERS_MODELS_PATH'] = '/path/to/models'
-        if is_model_available('your-model-name'):
-            model = load_model('your-model-name')
-        ```
+        List of available model names.
     """
-    global _AVAILABLE_MODELS
-    _AVAILABLE_MODELS = _scan_models()
-    return model_name in _AVAILABLE_MODELS
+    return list(AVAILABLE_MODELS.keys())
+
+def is_model_available(model_name: str) -> bool:
+    """Check if a pre-trained model is available.
+    
+    Args:
+        model_name: Name of the model to check.
+        
+    Returns:
+        True if the model is available, False otherwise.
+    """
+    return model_name in AVAILABLE_MODELS
+
+def get_model_config(model_name: str) -> Optional[Dict[str, Any]]:
+    """Get configuration for a pre-trained model.
+    
+    Args:
+        model_name: Name of the model to get configuration for.
+        
+    Returns:
+        Model configuration dictionary, or None if the model is not available.
+    """
+    if model_name in AVAILABLE_MODELS:
+        return AVAILABLE_MODELS[model_name]["config"]
+    return None
 
 def version() -> str:
-    """Get the version of DeepPowers."""
-    return __version__
+    """Get the version of the library.
+    
+    Returns:
+        Version string.
+    """
+    return "0.1.0"
 
 def cuda_version() -> str:
-    """Get the version of CUDA."""
+    """Get the CUDA version.
+    
+    Returns:
+        CUDA version string.
+    """
     return _deeppowers_core.get_cuda_version()
 
 def cuda_available() -> bool:
-    """Check if CUDA is available."""
+    """Check if CUDA is available.
+    
+    Returns:
+        True if CUDA is available, False otherwise.
+    """
     return _deeppowers_core.is_cuda_available()
 
 def cuda_device_count() -> int:
-    """Get the number of CUDA devices."""
-    return _deeppowers_core.get_cuda_device_count() 
+    """Get the number of CUDA devices.
+    
+    Returns:
+        Number of CUDA devices.
+    """
+    return _deeppowers_core.get_cuda_device_count()
+
+# Version information
+__version__ = version() 

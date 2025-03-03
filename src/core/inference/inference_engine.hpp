@@ -8,21 +8,52 @@
 #include <future>
 #include <thread>
 #include <mutex>
+#include <string>
+#include <function>
 
 namespace deeppowers {
 
 /**
- * @brief Configuration for inference engine
+ * Configuration for inference execution
  */
 struct InferenceConfig {
-    size_t batch_size = 1;                  // Batch size for inference
-    bool enable_tensor_cores = true;        // Whether to use tensor cores
-    bool enable_graph_optimization = true;  // Whether to enable graph optimization
-    bool enable_kernel_fusion = true;       // Whether to enable kernel fusion
-    bool enable_dynamic_batching = true;    // Whether to enable dynamic batching
-    size_t num_worker_threads = 4;          // Number of worker threads
-    size_t workspace_size = 1024*1024*1024; // Workspace size in bytes (1GB)
+    // Generation parameters
+    int max_length = 100;
+    int min_length = 0;
+    float temperature = 1.0f;
+    int top_k = 50;
+    float top_p = 0.9f;
+    float repetition_penalty = 1.0f;
+    int num_return_sequences = 1;
+    bool do_sample = true;
+    bool early_stopping = false;
+    
+    // Execution parameters
+    bool use_cuda = true;
+    bool use_mixed_precision = true;
+    int batch_size = 1;
+    std::string device = "cuda";
+    
+    // Performance parameters
+    bool use_memory_cache = true;
+    bool use_kv_cache = true;
+    int prefill_chunk_size = 512;
 };
+
+/**
+ * Result of inference operation
+ */
+struct InferenceResult {
+    std::vector<std::vector<int>> token_ids;  // Generated token IDs
+    std::vector<std::vector<float>> logprobs; // Log probabilities
+    std::vector<std::string> stop_reasons;    // Reasons for stopping
+    float generation_time = 0.0f;            // Time taken for generation in seconds
+};
+
+/**
+ * Callback function for streaming generation
+ */
+using StreamingCallback = std::function<bool(const InferenceResult&)>;
 
 /**
  * @brief Statistics for inference engine
@@ -37,40 +68,81 @@ struct InferenceStats {
 };
 
 /**
- * @brief Inference engine for model execution
+ * @brief Inference engine for text generation
  */
 class InferenceEngine {
 public:
     /**
-     * @brief Constructor
-     * @param device Device to run inference on
+     * Create inference engine with model
+     * @param model Pretrained model
+     */
+    explicit InferenceEngine(std::shared_ptr<Model> model);
+    
+    /**
+     * Destructor
+     */
+    ~InferenceEngine();
+    
+    /**
+     * Generate text from input tokens
+     * @param input_ids Input token IDs
+     * @param attention_mask Attention mask (optional)
+     * @param config Inference configuration
+     * @return Generated token IDs and metrics
+     */
+    InferenceResult generate(
+        const std::vector<int>& input_ids,
+        const std::vector<int>& attention_mask,
+        const InferenceConfig& config = InferenceConfig()
+    );
+    
+    /**
+     * Generate text from batch of input tokens
+     * @param batch_input_ids Batch of input token IDs
+     * @param batch_attention_mask Batch of attention masks (optional)
+     * @param config Inference configuration
+     * @return Generated token IDs and metrics for each input
+     */
+    std::vector<InferenceResult> generate_batch(
+        const std::vector<std::vector<int>>& batch_input_ids,
+        const std::vector<std::vector<int>>& batch_attention_mask,
+        const InferenceConfig& config = InferenceConfig()
+    );
+    
+    /**
+     * Generate text with streaming output
+     * @param input_ids Input token IDs
+     * @param callback Callback function for streaming output
      * @param config Inference configuration
      */
-    explicit InferenceEngine(hal::Device* device,
-                           const InferenceConfig& config = InferenceConfig());
-    ~InferenceEngine();
-
+    void generate_stream(
+        const std::vector<int>& input_ids,
+        StreamingCallback callback,
+        const InferenceConfig& config = InferenceConfig()
+    );
+    
     /**
-     * @brief Initialize the engine
+     * Prepare model for inference
+     * @param config Inference configuration
      */
-    void initialize();
-
+    void prepare(const InferenceConfig& config = InferenceConfig());
+    
     /**
-     * @brief Run inference on input tensors
-     * @param inputs Input tensors
-     * @param outputs Output tensors
+     * Reset inference state
      */
-    void run(const std::vector<hal::Tensor*>& inputs,
-            std::vector<hal::Tensor*>& outputs);
-
+    void reset();
+    
     /**
-     * @brief Run inference asynchronously
-     * @param inputs Input tensors
-     * @param outputs Output tensors
-     * @return Future for inference completion
+     * Get current model
+     * @return Model pointer
      */
-    std::future<void> run_async(const std::vector<hal::Tensor*>& inputs,
-                               std::vector<hal::Tensor*>& outputs);
+    std::shared_ptr<Model> model() const;
+    
+    /**
+     * Set new model
+     * @param model New model
+     */
+    void set_model(std::shared_ptr<Model> model);
 
     /**
      * @brief Get inference statistics
@@ -90,35 +162,26 @@ public:
     void update_config(const InferenceConfig& config);
 
 private:
-    // Internal structures
-    struct InferenceTask {
-        std::vector<hal::Tensor*> inputs;
-        std::vector<hal::Tensor*> outputs;
-        std::promise<void> promise;
-    };
-
-    struct ComputeGraph {
-        struct Node {
-            hal::Kernel* kernel;
-            std::vector<Node*> inputs;
-            std::vector<Node*> outputs;
-            hal::Tensor* output_tensor;
-            bool is_fused;
-        };
-        std::vector<std::unique_ptr<Node>> nodes;
-    };
-
-    // Internal helper methods
-    void worker_thread_func();
-    void optimize_graph();
-    void fuse_kernels();
-    void allocate_workspace();
-    void update_statistics(double latency_ms);
-
-    // Memory management
-    void* allocate_workspace(size_t size);
-    void free_workspace(void* ptr);
-    void manage_memory_pressure();
+    std::shared_ptr<Model> model_;
+    bool is_prepared_ = false;
+    
+    // Internal state for KV cache
+    std::vector<Tensor> key_cache_;
+    std::vector<Tensor> value_cache_;
+    
+    // Internal methods
+    Tensor prepare_inputs(const std::vector<int>& input_ids, 
+                        const std::vector<int>& attention_mask);
+    
+    int sample_token(const Tensor& logits, 
+                    const std::vector<int>& prev_tokens,
+                    const InferenceConfig& config);
+    
+    bool should_stop(const std::vector<int>& output_ids, 
+                    int current_length,
+                    const InferenceConfig& config);
+    
+    void init_caches(int batch_size, int max_length, int hidden_size);
 
     // Device and configuration
     hal::Device* device_;

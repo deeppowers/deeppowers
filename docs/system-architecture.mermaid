@@ -1,0 +1,46 @@
+flowchart LR
+    subgraph UI["User Interaction"]
+        UA["User Application/Client"]
+        API["API Endpoint"]
+    end
+
+    subgraph RH["Request Handling"]
+        RQ["Request Queue"]
+        BE["Batching Engine"]
+        IP["Input Preprocessing"]
+    end
+
+    subgraph CE["Core Engine"]
+        GC["Graph Compiler"]
+        EE["Execution Engine"]
+        HAL["Hardware Abstraction\nLayer - HAL"]
+    end
+
+    subgraph HB["Hardware Backends"]
+        NV["NVIDIA GPU - CUDA"]
+        AMD["AMD GPU - ROCm"]
+        Apple["Apple GPU - Metal"]
+        Intel["Intel GPU - oneAPI"]
+        CPU["CPU - oneDNN/MKL"]
+    end
+
+    subgraph OP["Output Processing"]
+        OPP["Output Postprocessing"]
+        AR["API Response"]
+    end
+
+    UA --> API
+    API --> RQ
+    RQ --> BE
+    BE --> IP
+    IP --> GC
+    GC --> EE
+    EE --> HAL
+    HAL --> NV
+    HAL --> AMD
+    HAL --> Apple
+    HAL --> Intel
+    HAL --> CPU
+    HAL --> OPP
+    OPP --> AR
+    AR --> UA
