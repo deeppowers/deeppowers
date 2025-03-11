@@ -44,6 +44,32 @@ enum class TuningObjective {
 };
 
 /**
+ * @enum QuantizationMethod
+ * @brief Supported quantization methods
+ */
+enum class QuantizationMethod {
+    NONE,           ///< No quantization (FP32)
+    INT8,           ///< 8-bit integer quantization
+    FP16,           ///< 16-bit floating point
+    INT4,           ///< 4-bit integer quantization
+    INT16,          ///< 16-bit integer quantization
+    DYNAMIC,        ///< Dynamic quantization
+    MIXED          ///< Mixed precision quantization
+};
+
+/**
+ * @enum CalibrationMethod
+ * @brief Methods for quantization calibration
+ */
+enum class CalibrationMethod {
+    MINMAX,         ///< Min-max calibration
+    KL_DIVERGENCE,  ///< KL divergence-based calibration
+    MSE,           ///< Mean squared error calibration
+    ENTROPY,       ///< Entropy-based calibration
+    PERCENTILE     ///< Percentile-based calibration
+};
+
+/**
  * @struct TuningParameter
  * @brief Definition of a parameter to be tuned.
  */
@@ -92,6 +118,37 @@ enum class DynamicShapeStrategy {
 };
 
 /**
+ * @struct QuantizationConfig
+ * @brief Configuration for model quantization
+ */
+struct QuantizationConfig {
+    QuantizationMethod method = QuantizationMethod::NONE;  ///< Quantization method
+    CalibrationMethod calib_method = CalibrationMethod::MINMAX;  ///< Calibration method
+    bool per_channel = false;     ///< Whether to use per-channel quantization
+    bool symmetric = true;        ///< Whether to use symmetric quantization
+    float calib_ratio = 0.1f;    ///< Ratio of data to use for calibration
+    int num_bits = 8;            ///< Number of bits for quantization
+    float tolerance = 0.01f;     ///< Accuracy tolerance for quantization
+    std::vector<std::string> excluded_ops;  ///< Operations to exclude from quantization
+    std::vector<std::string> custom_scales; ///< Custom scaling factors for specific layers
+};
+
+/**
+ * @struct QuantizationResult
+ * @brief Results from quantization process
+ */
+struct QuantizationResult {
+    bool success = false;         ///< Whether quantization was successful
+    float accuracy_fp32 = 0.0f;   ///< Accuracy with FP32 precision
+    float accuracy_quantized = 0.0f;  ///< Accuracy after quantization
+    float memory_reduction = 0.0f;    ///< Memory reduction ratio
+    float speed_up = 0.0f;           ///< Speed improvement ratio
+    std::string error_message;        ///< Error message if quantization failed
+    std::unordered_map<std::string, float> layer_wise_errors;  ///< Per-layer quantization errors
+    std::unordered_map<std::string, std::vector<float>> calibration_stats;  ///< Calibration statistics
+};
+
+/**
  * @struct TuningConfig
  * @brief Configuration for the auto-tuning process.
  */
@@ -105,12 +162,13 @@ struct TuningConfig {
     bool verbose = false;              ///< Whether to print verbose output
     std::vector<TuningParameter> parameters;  ///< Parameters to tune
     std::string calibration_data_path; ///< Path to calibration data
-    std::vector<ShapeConfig> shape_configs;            ///< 
-    DynamicShapeStrategy shape_strategy =              ///< 
+    std::vector<ShapeConfig> shape_configs;            ///< Shape configurations
+    DynamicShapeStrategy shape_strategy =              ///< Shape handling strategy
         DynamicShapeStrategy::DYNAMIC;
-    bool optimize_padding = true;                      ///< 
-    bool optimize_batch_size = true;                   ///< 
-    std::vector<int> target_batch_sizes = {1, 4, 8};  ///< 
+    bool optimize_padding = true;                      ///< Whether to optimize padding
+    bool optimize_batch_size = true;                   ///< Whether to optimize batch size
+    std::vector<int> target_batch_sizes = {1, 4, 8};  ///< Target batch sizes
+    QuantizationConfig quantization;                   ///< Quantization configuration
 };
 
 /**
@@ -236,6 +294,48 @@ public:
      */
     std::vector<std::vector<std::vector<int>>> optimize_batching(
         const std::vector<std::vector<int>>& inputs) const;
+
+    /**
+     * @brief Set quantization configuration
+     * @param config Quantization configuration
+     */
+    void set_quantization_config(const QuantizationConfig& config);
+
+    /**
+     * @brief Get current quantization configuration
+     * @return Current quantization configuration
+     */
+    QuantizationConfig get_quantization_config() const;
+
+    /**
+     * @brief Quantize the model using current configuration
+     * @param model The model to quantize
+     * @param calibration_data Data for calibration
+     * @return Quantization results
+     */
+    QuantizationResult quantize_model(
+        Model* model,
+        const std::vector<std::vector<int>>& calibration_data);
+
+    /**
+     * @brief Calibrate quantization parameters
+     * @param model The model to calibrate
+     * @param calibration_data Calibration dataset
+     * @return Whether calibration was successful
+     */
+    bool calibrate_quantization(
+        Model* model,
+        const std::vector<std::vector<int>>& calibration_data);
+
+    /**
+     * @brief Evaluate quantization accuracy
+     * @param model The quantized model
+     * @param test_data Test dataset
+     * @return Evaluation metrics
+     */
+    QuantizationResult evaluate_quantization(
+        Model* model,
+        const std::vector<std::vector<int>>& test_data);
 
 private:
     /**

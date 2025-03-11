@@ -987,4 +987,197 @@ std::unordered_map<std::string, float> AutoTuner::benchmark_model(
     };
 }
 
+void AutoTuner::set_quantization_config(const QuantizationConfig& config) {
+    // Add quantization config to tuning config
+    config_.quantization = config;
+}
+
+QuantizationConfig AutoTuner::get_quantization_config() const {
+    return config_.quantization;
+}
+
+QuantizationResult AutoTuner::quantize_model(
+    Model* model,
+    const std::vector<std::vector<int>>& calibration_data) {
+    
+    QuantizationResult result;
+    
+    try {
+        if (!model) {
+            throw std::runtime_error("Invalid model pointer");
+        }
+
+        // Record original FP32 accuracy
+        result.accuracy_fp32 = evaluate_parameters(model, {}, calibration_data);
+        
+        // Calibrate quantization parameters
+        if (!calibrate_quantization(model, calibration_data)) {
+            throw std::runtime_error("Quantization calibration failed");
+        }
+        
+        // Record initial memory and performance
+        float initial_memory = model->get_memory_usage();
+        auto initial_perf = benchmark_model(model, {}, calibration_data);
+        
+        // Apply quantization based on method
+        switch (config_.quantization.method) {
+            case QuantizationMethod::INT8:
+                model->quantize_int8(config_.quantization.per_channel);
+                break;
+            case QuantizationMethod::FP16:
+                model->quantize_fp16();
+                break;
+            case QuantizationMethod::INT4:
+                model->quantize_int4(config_.quantization.per_channel);
+                break;
+            case QuantizationMethod::INT16:
+                model->quantize_int16(config_.quantization.per_channel);
+                break;
+            case QuantizationMethod::DYNAMIC:
+                model->quantize_dynamic(config_.quantization.num_bits);
+                break;
+            case QuantizationMethod::MIXED:
+                model->quantize_mixed(config_.quantization.excluded_ops);
+                break;
+            default:
+                throw std::runtime_error("Unsupported quantization method");
+        }
+        
+        // Evaluate quantized model
+        result = evaluate_quantization(model, calibration_data);
+        
+        // Calculate memory reduction
+        float final_memory = model->get_memory_usage();
+        result.memory_reduction = 1.0f - (final_memory / initial_memory);
+        
+        // Calculate speed improvement
+        auto final_perf = benchmark_model(model, {}, calibration_data);
+        result.speed_up = final_perf["throughput"] / initial_perf["throughput"];
+        
+        result.success = true;
+        
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.error_message = e.what();
+    }
+    
+    return result;
+}
+
+bool AutoTuner::calibrate_quantization(
+    Model* model,
+    const std::vector<std::vector<int>>& calibration_data) {
+    
+    try {
+        // Select calibration subset based on ratio
+        size_t calib_size = static_cast<size_t>(calibration_data.size() * config_.quantization.calib_ratio);
+        std::vector<std::vector<int>> calib_subset(
+            calibration_data.begin(),
+            calibration_data.begin() + std::min(calib_size, calibration_data.size())
+        );
+        
+        // Initialize calibration statistics
+        std::unordered_map<std::string, std::vector<float>> stats;
+        
+        // Collect activation statistics
+        for (const auto& input : calib_subset) {
+            // Run inference and collect layer outputs
+            auto layer_outputs = model->run_with_intermediate(input);
+            
+            // Update statistics based on calibration method
+            for (const auto& [layer_name, output] : layer_outputs) {
+                switch (config_.quantization.calib_method) {
+                    case CalibrationMethod::MINMAX: {
+                        auto [min_val, max_val] = model->get_tensor_range(output);
+                        stats[layer_name] = {min_val, max_val};
+                        break;
+                    }
+                    case CalibrationMethod::KL_DIVERGENCE:
+                        stats[layer_name] = model->compute_kl_divergence(output);
+                        break;
+                    case CalibrationMethod::MSE:
+                        stats[layer_name] = model->compute_mse_stats(output);
+                        break;
+                    case CalibrationMethod::ENTROPY:
+                        stats[layer_name] = model->compute_entropy_stats(output);
+                        break;
+                    case CalibrationMethod::PERCENTILE:
+                        stats[layer_name] = model->compute_percentile_stats(output);
+                        break;
+                }
+            }
+        }
+        
+        // Set calibration parameters
+        for (const auto& [layer_name, layer_stats] : stats) {
+            model->set_quantization_params(layer_name, layer_stats);
+        }
+        
+        // Apply custom scales if provided
+        for (const auto& scale_info : config_.quantization.custom_scales) {
+            model->set_custom_scale(scale_info);
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        if (config_.verbose) {
+            std::cerr << "Calibration failed: " << e.what() << std::endl;
+        }
+        return false;
+    }
+}
+
+QuantizationResult AutoTuner::evaluate_quantization(
+    Model* model,
+    const std::vector<std::vector<int>>& test_data) {
+    
+    QuantizationResult result;
+    
+    try {
+        // Evaluate accuracy on test data
+        float total_accuracy = 0.0f;
+        std::unordered_map<std::string, float> layer_errors;
+        
+        for (const auto& input : test_data) {
+            // Run inference and collect metrics
+            auto output = model->run(input);
+            auto layer_metrics = model->get_layer_metrics();
+            
+            // Update accuracy
+            if (model->has_ground_truth()) {
+                total_accuracy += model->calculate_accuracy(output);
+            }
+            
+            // Accumulate layer-wise errors
+            for (const auto& [layer_name, error] : layer_metrics) {
+                layer_errors[layer_name] += error;
+            }
+        }
+        
+        // Calculate average accuracy
+        result.accuracy_quantized = total_accuracy / test_data.size();
+        
+        // Calculate average layer errors
+        for (auto& [layer_name, error] : layer_errors) {
+            error /= test_data.size();
+        }
+        result.layer_wise_errors = layer_errors;
+        
+        // Check if accuracy degradation is within tolerance
+        float accuracy_drop = result.accuracy_fp32 - result.accuracy_quantized;
+        result.success = accuracy_drop <= config_.quantization.tolerance;
+        
+        if (!result.success) {
+            result.error_message = "Accuracy degradation exceeds tolerance";
+        }
+        
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.error_message = e.what();
+    }
+    
+    return result;
+}
+
 } // namespace deeppowers 
