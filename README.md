@@ -6,7 +6,7 @@
   </a>
 </div>
 <p align="center">
-  <em>DEEPPOWERS is a cutting-edge MCP (Model Context Protocol) inference acceleration engine that is revolutionizing MCP workflows, eliminating latency, optimizing interactions, and powering the next generation of MCP collaboration.</em>
+  <em>DEEPPOWERS is a Fully Homomorphic Encryption (FHE) collaboration framework built for MCP (Model Context Protocol), aiming to provide end-to-end privacy protection and highly efficient computation for the upstream and downstream ecosystems of the MCP protocol. By deeply integrating the FHE framework with the MCP protocol, we are dedicated to creating a secure, efficient, and scalable computing framework for MCP. This ensures that data remains encrypted throughout transmission, storage, and computation, while also supporting complex computing logic, eliminating unnecessary data transmission and computation, and thereby rapidly improving MCP's operational efficiency.</em>
 </p>
 <p>
 <em align="center">
@@ -22,9 +22,7 @@ By removing delays in MCP interactions, it aims to provide robust momentum for t
 
 ## Overview
 
-In the rapidly evolving landscape of artificial intelligence, the Model Context Protocol (MCP) stands as a cornerstone for seamless communication and collaboration between AI models. However, the inherent complexities of MCP, often plagued by latency and inefficient workflows, have become a significant bottleneck, hindering the true potential of collaborative AI. Enter 
-
-DEEPPOWERS, a revolutionary inference acceleration engine poised to redefine the very fabric of the MCP ecosystem. More than just an incremental improvement, DEEPPOWERS represents a paradigm shift, ushering in an era of unprecedented speed, efficiency, and collaborative power for the entire MCP world. This is not simply about making things faster; it's about unlocking entirely new possibilities for AI development and deployment.
+Fully Homomorphic Encryption (FHE) allows computations (such as addition, multiplication, etc.) to be performed directly on encrypted data without decryption. The computation results remain encrypted, and only authorized users can decrypt them. FHE resolves the conflict between data privacy and computational efficiency and is suitable for scenarios such as cloud computing, medical data analysis, and financial transactions. Its core lies in ensuring data remains encrypted throughout the process, eliminating the risk of privacy leakage in intermediate steps, while supporting complex computations, providing the ultimate guarantee for data security and compliance. It supports languages such as C++, Python, and CUDA, facilitating integration into the existing MCP ecosystem.
 
 ## Key Features
 
