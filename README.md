@@ -212,3 +212,5 @@ We plan to introduce a native token-based incentive mechanism for the DeepPowers
 Stay tuned for updates on our progress and early access opportunities.
 
 For inquiries about DeepPowers, please contact our development team.
+
+FHEDEEP CA：6uHQEuSFwrCYKByHfkVgWrGWTESRZpNm951PaqxWpump
