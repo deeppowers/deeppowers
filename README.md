@@ -1,4 +1,4 @@
-# Deeppowers
+# DeepPowers
 
 <div align="center">
   <a href="deeppowers.xyz">
@@ -24,419 +24,191 @@ By removing delays in MCP interactions, it aims to provide robust momentum for t
 
 Fully Homomorphic Encryption (FHE) allows computations (such as addition, multiplication, etc.) to be performed directly on encrypted data without decryption. The computation results remain encrypted, and only authorized users can decrypt them. FHE resolves the conflict between data privacy and computational efficiency and is suitable for scenarios such as cloud computing, medical data analysis, and financial transactions. Its core lies in ensuring data remains encrypted throughout the process, eliminating the risk of privacy leakage in intermediate steps, while supporting complex computations, providing the ultimate guarantee for data security and compliance. It supports languages such as C++, Python, and CUDA, facilitating integration into the existing MCP ecosystem.
 
-## Key Features
 
-### Core Architecture
-- Hardware Abstraction Layer (HAL)
-- CUDA device management
-- Basic tensor operations
-- Kernel management system
+## Key features
 
-### Request Processing
-- Request queue management
-- Batch processing system
-- Priority scheduling
-- Error handling mechanism
+- **End-to-end Encryption**: Complete protection for user-LLM interactions with data remaining encrypted throughout the entire process
+- **Secure Task Execution**: Encrypted data transmission and computation for sensitive operations without exposure to third parties
+- **Seamless MCP Integration**: Deep integration with the Model Context Protocol ecosystem, enhancing MCP's capabilities with privacy-preserving computations
+- **Accelerated MCP Workflows**: Process encrypted data locally and reduce unnecessary transfers, significantly improving MCP operational efficiency
+- **Enhanced Tool Security**: Enable secure execution of MCP tools that handle sensitive data, expanding the scope of privacy-preserving tasks
+- **Cross-Model Compatibility**: Work with various MCP servers and LLM providers including DeepSeek, GPT, Gemini, and Claude
+- **Reduced Latency**: Minimize delays in MCP interactions by optimizing the encryption, computation, and decryption processes
+- **Privacy-Preserving AI**: Complete AI assistance workflows while maintaining strict data privacy throughout
+- **Scalable Architecture**: Designed to grow with the MCP ecosystem, supporting emerging models and computational tools
 
-### Quantization
-- INT8 quantization support
-- INT4 quantization support
-- Mixed-precision quantization
-- Calibration data management
+## Powered by Concrete-ML
 
-### API Interface
-- C++ API infrastructure
-- Python bindings
-- REST API infrastructure
-- gRPC service infrastructure
+DeepPowers is built on [Concrete-ML](https://github.com/zama-ai/concrete-ml), an open-source library developed by Zama for privacy-preserving machine learning using Fully Homomorphic Encryption.
 
-### Middleware
-- Authentication middleware
-- Rate limiting middleware
-- Logging middleware
-- Monitoring middleware
-- Error handling middleware
+Concrete-ML provides:
+- Privacy-preserving ML framework using FHE
+- Compatibility with traditional ML frameworks (scikit-learn, PyTorch)
+- Tools for quantizing and converting ML models for FHE execution
+- Simple and intuitive APIs similar to scikit-learn
 
-### Inference Optimization
-- Model operator fusion
-- Weight pruning techniques
-- KV-cache optimization
-- Automatic optimization selection
-- Performance profiling and benchmarking
+With Concrete-ML as its foundation, DeepPowers extends these capabilities to LLM interactions, creating a secure environment for AI-assisted tasks.
 
-## Architecture
+## Structure
 
-### Technical Architecture Diagram
+![Structure](assets/structure.png)
 
-![Technical Architecture Diagram](assets/system-architecture.png)
+### 1. MCP Client
+- **Responsibilities:**  
+  - Local FHE encryption/decryption  
+  - Key pair generation and management (private key never leaves the client)  
+  - Task submission and encrypted result display  
+  - User authentication and permission control
 
-The architecture follows a pipeline-based design with several key components:
+### 2. MCP Server
+- **Responsibilities:**  
+  - Secure storage and dispatching of encrypted data and tasks  
+  - Task management and scheduling  
+  - Node status monitoring and logging  
+  - No access to plaintext data
 
-1. **Request Flow**
-   - User requests enter the system through a unified interface
-   - Requests are queued and prioritized in the Request Queue
-   - Batching system groups compatible requests for optimal processing
-   - Execution Engine processes batches and generates results
-   - Output is post-processed and returned to users
+### 3. TEE Compute Node
+- **Responsibilities:**  
+  - Executes encrypted computations using FHE libraries within a Trusted Execution Environment (TEE)  
+  - Ensures data and computation security during runtime  
+  - Outputs encrypted results and computation proofs
 
-2. **Control Flow**
-   - Configuration Manager oversees system settings and runtime parameters
-   - Graph Compiler optimizes computation graphs for execution
-   - Hardware Abstraction Layer provides unified access to different hardware backends
+### 4. Decentralised Review Nodes
+- **Responsibilities:**  
+  - Perform consensus and verification of computation results and proofs  
+  - Ensure consistency and integrity of results  
+  - Write audit logs and consensus records to the blockchain for traceability
 
-3. **Optimization Points**
-   - Dynamic batching for throughput optimization
-   - Graph compilation for computation optimization
-   - Hardware-specific optimizations through HAL
-   - Configuration-based performance tuning
+### 5. Blockchain
+- **Responsibilities:**  
+  - Store audit logs, computation proofs, and operation records  
+  - Ensure full traceability and immutability of the process  
+  - Facilitate compliance with regulations (e.g., GDPR, HIPAA)
 
-### Directory Structure
+To experience the complete workflow, check out our [Demo](https://github.com/deeppowers/Deeppowers-Demo).
 
-```
-deeppowers/
-├── src/
-│   ├── core/                      # Core implementation
-│   │   ├── hal/                  # Hardware Abstraction Layer for device management
-│   │   ├── request_queue/        # Request queue and management system
-│   │   ├── batching/            # Batch processing and optimization
-│   │   ├── execution/           # Execution engine and runtime
-│   │   ├── distributed/         # Distributed computing support
-│   │   ├── scheduling/          # Task scheduling and resource management
-│   │   ├── monitoring/          # System monitoring and metrics
-│   │   ├── config/             # Configuration management
-│   │   ├── preprocessing/      # Input preprocessing pipeline
-│   │   ├── postprocessing/     # Output postprocessing pipeline
-│   │   ├── graph/              # Computation graph management
-│   │   ├── api/               # Internal API implementations
-│   │   ├── model/             # Base model architecture
-│   │   ├── memory/            # Memory management system
-│   │   ├── inference/         # Inference engine core
-│   │   ├── models/            # Specific model implementations
-│   │   ├── tokenizer/         # Tokenization implementations
-│   │   └── utils/             # Utility components
-│   ├── api/                   # External API implementations
-│   └── common/                # Common utilities
-├── tests/                     # Test suite
-├── scripts/                   # Utility scripts
-├── examples/                  # Example usage  
-├── docs/                      # Documentation
-└── README.md                  # Project overview
-```
+## Key Technology Integration
 
-The core module is organized into specialized components:
+### FHE Encryption and Ciphertext Computation
+- **Encryption Algorithm Selection**: Utilizes industry-leading FHE libraries (such as Microsoft SEAL, OpenFHE, IBM HELib), supporting encryption and computation for various data types including integers and floating-point numbers.
+- **Ciphertext Computation Process**: All AI inference, data analysis, and statistical tasks are completed in the encrypted state, with results remaining encrypted.
+- **Key Management**: Users generate and maintain FHE key pairs locally, ensuring private keys never leave the local environment to maximize protection against key leakage.
 
-### Infrastructure Components
-- **HAL (Hardware Abstraction Layer)**: Manages hardware devices and provides unified interface for different backends
-- **Request Queue**: Handles incoming requests with priority management and load balancing
-- **Batching**: Implements dynamic batching strategies for optimal throughput
-- **Execution**: Core execution engine for model inference
-- **Distributed**: Supports distributed computing and model parallelism
+### Trusted Execution Environment (TEE)
+- **TEE Function**: Provides trusted execution guarantees for performance bottleneck processes (such as ciphertext batch processing, key exchange), preventing malicious access to runtime memory and registers.
+- **FHE and TEE Integration**: Loading FHE libraries within TEE further enhances the security and trustworthiness of ciphertext computation.
 
-### Resource Management
-- **Scheduling**: Manages task scheduling and resource allocation
-- **Monitoring**: System metrics collection and performance monitoring
-- **Config**: Configuration management and validation
-- **Memory**: Advanced memory management and optimization
+### Decentralized Verification and Blockchain Consensus
+- **Multi-Node Consensus**: Through blockchain or distributed ledger technology, multiple verification nodes perform consistency checks and reach consensus on ciphertext computation results, ensuring they cannot be tampered with.
+- **Transparency and Traceability**: Every operation is traceable, enhancing process transparency and user trust.
 
-### Processing Pipeline
-- **Preprocessing**: Input data preparation and normalization
-- **Postprocessing**: Output processing and formatting
-- **Graph**: Computation graph optimization and management
-- **Inference**: Core inference engine implementation
+### Performance Optimization and Engineering Implementation
+- **Batch Processing and Pipeline Optimization**: Optimizing ciphertext batch operations and pipeline processing to reduce FHE computation latency.
+- **Algorithm Adaptation and Simplification**: Adapting AI models and statistical algorithms for FHE characteristics, reducing multiplication depth and optimizing operation gate counts.
+- **Frontend Integration**: Integrating FHE encryption/decryption functions into terminal applications through WebAssembly or Native SDK to enhance user experience.
 
-### Model Components
-- **Model**: Base model architecture and interfaces
-- **Models**: Specific model implementations (GPT, BERT, etc.)
-- **Tokenizer**: Text tokenization algorithms and utilities
+## Development
 
-### Support Systems
-- **API**: Internal API implementations for core functionality
-- **Utils**: Common utilities and helper functions
+As part of our development effort, we are implementing significant hardware optimizations for Concrete-ML to accelerate encrypted computation processes. These optimizations are crucial for improving the performance of homomorphic encryption operations, which are typically computation-intensive.
 
-## Installation
+Our hardware optimization initiatives include:
+- Custom hardware acceleration for key FHE operations
+- Parallel processing implementations for encrypted data
+- Low-level optimizations for cryptographic primitives
+- Specialized memory management for FHE workflows
 
-### Prerequisites
-- C++17 compiler
-- CMake 3.15+
-- Python 3.8+ (for Python bindings)
-- ICU library for Unicode support
+These optimizations will enable DeepPowers to process encrypted data more efficiently, making privacy-preserving AI interactions faster and more practical for real-world applications.
 
-```bash
-# Install dependencies (Ubuntu)
-sudo apt-get install build-essential cmake libicu-dev
+## Technical Challenges and Solutions
 
-# Clone and build
-git clone https://github.com/deeppowers/deeppowers.git
-cd deeppowers
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j
+### 1. High Performance Overhead of FHE Computation
+- **Challenge**: FHE operations are fundamentally several orders of magnitude slower than plaintext computation, especially with large-scale data or complex models, resulting in high latency and resource consumption.
+- **Solutions**:
+  - Utilize the latest FHE libraries with SIMD and other batch processing technologies to improve throughput.
+  - Prioritize supporting low-depth, low-complexity AI/data analysis tasks for practical application scenarios.
+  - Combine with TEE, using secure hardware acceleration for non-core computations to balance security and performance.
 
-# Install Python package (optional)
-cd ./src/api/python
-pip install -e .
-```
+### 2. Key Management and User Experience
+- **Challenge**: FHE keys, once lost, make data recovery impossible, making local key management and backup critical.
+- **Solutions**:
+  - Provide multiple key management methods including local secure storage, hardware security modules (HSM), or mnemonic phrases.
+  - Design user-friendly key recovery mechanisms to lower operational barriers.
 
-```bash
-# Clone the repository
-git clone https://github.com/deeppowers/deeppowers.git
-cd deeppowers
+### 3. Algorithm Compatibility and Model Adaptation
+- **Challenge**: FHE currently has limited support for certain non-linear operations (such as ReLU, Sigmoid), making complex AI models difficult to migrate directly.
+- **Solutions**:
+  - Prioritize FHE-friendly algorithms such as linear models, decision trees, and logistic regression.
+  - Research homomorphic approximation methods, replacing complex operations with polynomial approximations.
+  - Continuously track advances in the FHE field to dynamically upgrade platform capabilities.
 
-# Install dependencies
-pip install -r requirements.txt
+### 4. Efficiency and Security of Decentralized Verification
+- **Challenge**: Multi-node consensus introduces latency and network load, with the risk of malicious nodes persisting.
+- **Solutions**:
+  - Adopt efficient Byzantine Fault Tolerance (BFT) consensus algorithms to improve verification efficiency.
+  - Introduce reputation mechanisms and economic penalties to incentivize honest participation.
 
-# Build from source
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-```
+### 5. End-to-End Security and Compliance
+- **Challenge**: Proving the platform does not leak user data throughout the process while meeting strict regulations like GDPR and HIPAA.
+- **Solutions**:
+  - Provide complete security audit logs and zero-knowledge proofs to demonstrate no plaintext data transfer on the platform.
+  - Regularly undergo third-party security audits and penetration testing.
 
-## Quick Start
+## Technical Achievements
 
-### Basic Usage
-```python
-import deeppowers as dp
+1. **End-to-End Encrypted Data Collaborative Computation**  
+   User data remains encrypted throughout collection, upload, computation, verification, and return, preventing the platform or third parties from seeing plaintext.
 
-# Method 1: Using Pipeline (Recommended)
-# Initialize pipeline with pre-trained model
-pipeline = dp.Pipeline.from_pretrained("deepseek-v3")
+2. **Integration of FHE with TEE, Blockchain, and Other Cutting-Edge Technologies**  
+   Breaking single technology barriers to achieve an innovative architecture with multiple security guarantees.
 
-# Generate text
-response = pipeline.generate(
-    "Hello, how are you?",
-    max_length=50,
-    temperature=0.7,
-    top_p=0.9
-)
-print(response)
+3. **Enabling Compliant AI/Data Analysis Deployment in Highly Sensitive Industries**  
+   Allowing medical, financial, and other sectors to fully extract data value without compromising privacy.
 
-# Batch processing
-responses = pipeline.generate(
-    ["Hello!", "How are you?"],
-    max_length=50,
-    temperature=0.7
-)
+4. **Providing a Replicable Technical Paradigm for Distributed Computing and Privacy Protection**  
+   Establishing a modular, scalable system architecture for future technology upgrades and business expansion.
 
-# Save and load pipeline
-pipeline.save("my_pipeline")
-loaded_pipeline = dp.Pipeline.load("my_pipeline")
+## Application Scenarios
 
-# Method 2: Using Tokenizer and Model separately
-# Initialize tokenizer
-tokenizer = dp.Tokenizer(model_name="deepseek-v3")  # or use custom vocab
-tokenizer.load("path/to/tokenizer.model")
+- **Medical Joint Modeling**: Multiple hospitals can jointly train AI models to improve diagnostic accuracy without sharing original patient cases, protecting patient privacy.
 
-# Initialize model
-model = dp.Model.from_pretrained("deepseek-v3")
+- **Financial Risk Control Collaboration**: Banks and insurance companies can jointly analyze fraud risks with fully encrypted customer information, preventing sensitive data leakage.
 
-# Create pipeline manually
-pipeline = dp.Pipeline(model=model, tokenizer=tokenizer)
-```
+- **Cross-Department Government Data Analysis**: Tax, public security, social security, and other departments can jointly analyze population movement and economic trends without concerns about data misuse.
 
-### Advanced Usage
+- **Cloud AI Inference Services**: Users can upload encrypted sensitive data, with cloud AI models inferring directly on ciphertext, preventing cloud service providers from accessing inputs or results.
 
-#### Custom Tokenizer Training
-```python
-# Initialize tokenizer with specific type
-tokenizer = dp.Tokenizer(tokenizer_type=dp.TokenizerType.WORDPIECE)
-
-# Train on custom data
-texts = ["your", "training", "texts"]
-tokenizer.train(texts, vocab_size=30000, min_frequency=2)
-
-# Save and load
-tokenizer.save("tokenizer.model")
-tokenizer.load("tokenizer.model")
-
-# Basic tokenization
-tokens = tokenizer.encode("Hello, world!")
-text = tokenizer.decode(tokens)
-
-# Batch processing with parallel execution
-texts = ["multiple", "texts", "for", "processing"]
-tokens_batch = tokenizer.encode_batch(
-    texts,
-    add_special_tokens=True,
-    padding=True,
-    max_length=128
-)
-```
-
-#### Advanced Generation Control
-```python
-# Configure generation parameters
-response = pipeline.generate(
-    "Write a story about",
-    max_length=200,          # Maximum length of generated text
-    min_length=50,           # Minimum length of generated text
-    temperature=0.7,         # Controls randomness (higher = more random)
-    top_k=50,               # Limits vocabulary to top k tokens
-    top_p=0.9,              # Nucleus sampling threshold
-    num_return_sequences=3,  # Number of different sequences to generate
-    repetition_penalty=1.2   # Penalize repeated tokens
-)
-
-# Batch generation with multiple prompts
-prompts = [
-    "Write a story about",
-    "Explain quantum physics",
-    "Give me a recipe for"
-]
-responses = pipeline.generate(
-    prompts,
-    max_length=100,
-    temperature=0.8
-)
-```
-
-#### Model Optimization
-```python
-# Load model
-model = dp.load_model("deepseek-v3", device="cuda", dtype="float16")
-
-# Apply automatic optimization
-results = dp.optimize_model(model, optimization_type="auto", level="o2", enable_profiling=True)
-print(f"Achieved speedup: {results['speedup']}x")
-print(f"Memory reduction: {results['memory_reduction']}%")
-
-# Apply specific optimization techniques
-results = dp.optimize_model(model, optimization_type="fusion")
-results = dp.optimize_model(model, optimization_type="pruning")
-results = dp.optimize_model(model, optimization_type="caching")
-
-# Quantize model to INT8 precision
-results = dp.quantize_model(model, precision="int8")
-print(f"INT8 quantization speedup: {results['speedup']}x")
-print(f"Accuracy loss: {results['accuracy_loss']}%")
-
-# Run benchmarks
-benchmark_results = dp.benchmark_model(
-    model, 
-    input_text="This is a test input for benchmarking.",
-    num_runs=10, 
-    warmup_runs=3
-)
-print(f"Average latency: {benchmark_results['avg_latency_ms']} ms")
-print(f"Throughput: {benchmark_results['throughput_tokens_per_sec']} tokens/sec")
-```
-
-## Performance Tuning
-
-### Memory Optimization
-```python
-# Configure memory pool
-tokenizer.set_memory_pool_size(4096)  # 4KB blocks
-tokenizer.enable_string_pooling(True)
-
-# Monitor memory usage
-stats = tokenizer.get_memory_stats()
-print(f"Memory pool usage: {stats['pool_usage']}MB")
-print(f"String pool size: {stats['string_pool_size']}")
-```
-
-### Parallel Processing
-```python
-# Configure thread pool
-tokenizer.set_num_threads(8)
-tokenizer.set_batch_size(64)
-
-# Process large datasets
-with open("large_file.txt", "r") as f:
-    texts = f.readlines()
-tokens = tokenizer.encode_batch_parallel(texts)
-```
-
-## Documentation
-
-- [User Guide](docs/userguide.md)
-- [Architecture](docs/architecture.md)
-- [Design Principles](docs/principles.md)
-
-## Performance Optimization
-
-DeepPowers includes several performance optimization features:
-- Memory pooling and caching
-- Dynamic batching
-- Parallel processing
-- Mixed-precision computation
-- Distributed inference
-- Model quantization (INT8, INT4, mixed precision)
-- Operator fusion
-- KV-cache optimization
+- **Privacy-Protecting Data Market**: Individuals or enterprises can securely circulate and monetize encrypted data with dual guarantees of data ownership and privacy.
 
 ## Roadmap
 
-### Implemented Features ✨
-- ✅ Hardware Abstraction Layer (HAL) - Basic CUDA and ROCM support
-- ✅ Tokenizer Implementation - WordPiece and BPE algorithms
-- ✅ Memory Management - Basic memory pooling system
-- ✅ Request Queue Management - Basic request handling
-- ✅ Configuration System - Basic config management
-- ✅ Python Bindings - Basic API interface
-- ✅ Monitoring System - Basic metrics collection
-- ✅ Model Execution Framework - Core implementation
-- ✅ Inference Pipeline - Basic pipeline structure
-- ✅ Dynamic Batch Processing - Initial implementation
-- ✅ Model Loading System - Support for ONNX, PyTorch, and TensorFlow formats
-- ✅ Inference Engine - Complete implementation with text generation capabilities
-- ✅ Inference Optimization - Operator fusion, weight pruning, and caching optimizations
-- ✅ Quantization System - INT8, INT4, and mixed precision support
-- ✅ Benchmarking Tools - Performance measurement and optimization metrics
-- ✅ Streaming Generation - Real-time text generation with callback support
-- ✅ Advanced Batching Strategies - Batch processing with parallel inference
+The DeepPowers SDK development roadmap includes:
 
-### In Progress 🚧
-- 🔄 Computation Graph System - Advanced graph optimizations
-- 🔄 Distributed Computing Support - Multi-node inference
-- 🔄 Auto-tuning System - Automatic performance optimization
-- 🔄 Dynamic Shape Support - Flexible tensor dimensions handling
+### Phase 1: Core Infrastructure
+- [x] FHE integration with MCP framework
+- [x] Basic encryption protocols for LLM communication
+- [x] Prototype SDK for developer testing
+- [x] Initial hardware acceleration implementations
 
-### Planned Features 🎯
-- 📋 Advanced Model Support
-  - Advanced LLM implementations (GPT, Gemini, Claude)
-  - More sophisticated model architecture support
-  - Model compression and distillation
-- 📋 Performance Optimization
-  - Advanced memory management
-  - Kernel fusion optimizations
-  - Custom CUDA kernels for critical operations
-- 📋 Advanced Features
-  - Multi-GPU parallelism
-  - Distributed inference across nodes
-  - Advanced caching system with prefetching
-  - Speculative decoding
-  - Custom operator implementation
+### Phase 2: Feature Expansion
+- [ ] Enhanced model support for various LLM architectures
+- [ ] Expanded API capabilities for diverse applications
+- [ ] Performance optimizations for real-time interactions
+- [ ] Advanced hardware optimizations for Concrete-ML
+- [ ] GPU/FPGA acceleration for critical FHE operations
 
-## Benchmarking Tools
+### Phase 3: Enterprise Integration
+- [ ] Advanced security features for organizational deployment
+- [ ] Compliance and audit capabilities
+- [ ] Scalable infrastructure for high-volume applications
+- [ ] Fully optimized hardware acceleration with specialized processing units
+- [ ] Enterprise-grade performance for encrypted computations
 
-The project includes comprehensive benchmarking tools:
+## Coming Soon
 
-```bash
-# Run performance benchmark
-python examples/optimize_and_benchmark.py --model your-model --benchmark
+The DeepPowers SDK is currently under active development. Our team is working diligently to bring this technology to developers and organizations who prioritize privacy in their AI implementations.
 
-# Run with optimization
-python examples/optimize_and_benchmark.py --model your-model --optimization auto --level o2 --benchmark
+We plan to introduce a native token-based incentive mechanism for the DeepPowers system, rewarding ecosystem participants such as compute nodes, verification nodes, and data contributors based on task completion and service quality, while implementing staking and penalty mechanisms to ensure network security and trustworthiness. The token will not only serve as an incentive but also empower platform governance, service payments, and ecosystem collaboration, fostering community engagement and sustainable growth. Moving forward, this token incentive system will be a key driver for the prosperity of the DeepPowers ecosystem and the practical adoption of privacy-preserving computation.
 
-# Apply quantization
-python examples/optimize_and_benchmark.py --model your-model --quantize --quantize-precision int8 --benchmark
+Stay tuned for updates on our progress and early access opportunities.
 
-# Generate text with optimized model
-python examples/optimize_and_benchmark.py --model your-model --optimization auto --generate --prompt "Your prompt here"
-```
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-Special thanks to all contributors and the open-source community.
-
-## Contact
-
-- GitHub Issues: [Create an issue](https://github.com/deeppowers/deeppowers/issues)
+For inquiries about DeepPowers, please contact our development team.
